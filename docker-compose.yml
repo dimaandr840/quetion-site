@@ -1,0 +1,149 @@
+name: devprep
+
+# Общие правила усиления для всех сервисов:
+#  * no-new-privileges закрывает путь к эскалации через setuid-бинарники
+#    внутри образа, если RCE всё-таки случилась;
+#  * база и поиск порты наружу не публикуют вообще — только nginx смотрит в сеть;
+#  * размер логов ограничен, чтобы шумные атаки не забили диск хоста.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devprep}
+      POSTGRES_USER: ${POSTGRES_USER:-devprep}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devprep} -d ${POSTGRES_DB:-devprep}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  meilisearch:
+    <<: *hardening
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili-data:/meili_data
+    healthcheck:
+      # 127.0.0.1, а не localhost: Meilisearch слушает только IPv4, а wget внутри
+      # контейнера сначала пробует ::1 и получает connection refused.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    <<: *hardening
+    # JVM пишет только в /tmp, поэтому остальная ФС контейнера может быть только для чтения:
+    # закрепиться в контейнере и подменить файлы приложения уже не получится.
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    build:
+      context: ./backend
+    environment:
+      SERVER_PORT: 8080
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-devprep}
+      POSTGRES_USER: ${POSTGRES_USER:-devprep}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      MEILI_ENABLED: "true"
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
+      # false открывает /api/admin/** без входа — только для разработки.
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      # Secure-cookie требует HTTPS. По умолчанию включён; для локального
+      # запуска по http нужно выставить COOKIE_SECURE=false в .env.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-Strict}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      LOCKOUT_ENABLED: ${LOCKOUT_ENABLED:-true}
+      LOCKOUT_MAX_ATTEMPTS: ${LOCKOUT_MAX_ATTEMPTS:-5}
+      LOCKOUT_DURATION: ${LOCKOUT_DURATION:-PT15M}
+      LOGIN_RATE_LIMIT_ENABLED: ${LOGIN_RATE_LIMIT_ENABLED:-true}
+      LOGIN_RATE_LIMIT_MAX: ${LOGIN_RATE_LIMIT_MAX:-20}
+      LOGIN_RATE_LIMIT_WINDOW: ${LOGIN_RATE_LIMIT_WINDOW:-PT10M}
+      TOTP_REQUIRED_FOR_ADMINS: ${TOTP_REQUIRED_FOR_ADMINS:-true}
+      # Без ключа TOTP-секреты легли бы в БД открытым текстом, поэтому переменная обязательна.
+      TOTP_ENC_KEY: "${TOTP_ENC_KEY:?TOTP_ENC_KEY обязателен, см. openssl rand -base64 32}"
+      SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-false}
+      MANAGEMENT_ENDPOINTS: ${MANAGEMENT_ENDPOINTS:-health,info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    <<: *hardening
+    # Next.js пишет в .next/cache на рантаиме (ISR, оптимизация картинок),
+    # поэтому read_only здесь не включаем — только сбрасываем capabilities.
+    cap_drop:
+      - ALL
+    build:
+      context: ./frontend
+      args:
+        # Флаг вшивается в клиентский бандл на этапе сборки, поэтому build arg,
+        # а не environment: после его смены нужен --build.
+        NEXT_PUBLIC_AUTH_ENABLED: ${AUTH_ENABLED:-true}
+        # Абсолютный origin нужен robots.txt и sitemap.xml.
+        NEXT_PUBLIC_SITE_URL: ${PUBLIC_ORIGIN:-http://localhost}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_ORIGIN:-http://localhost}/api
+      API_INTERNAL_BASE_URL: http://api:8080/api
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  nginx:
+    <<: *hardening
+    image: nginx:1.27-alpine
+    # Конфиг и сертификаты примонтированы :ro, а рабочие каталоги — tmpfs,
+    # так что веб-сервер на периметре работает без записи на диск.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=64m
+      - /var/run:size=8m
+      - /tmp:size=32m
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  meili-data:

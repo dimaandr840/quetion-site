@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:devprep;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  liquibase:
+    enabled: false
+
+devprep:
+  seed:
+    enabled: true
+  jwt:
+    secret: test-secret-only-for-tests-do-not-use-in-production-32b
+  search:
+    enabled: false
+
+logging:
+  level:
+    com.devprep.api: INFO

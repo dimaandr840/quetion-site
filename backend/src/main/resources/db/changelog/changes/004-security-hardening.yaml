@@ -1,0 +1,165 @@
+databaseChangeLog:
+  # Персистентные refresh-токены: позволяют отзывать сессии, ротировать токены
+  # и обнаруживать повторное использование украденного токена.
+  - changeSet:
+      id: 004-refresh-token
+      author: devprep
+      changes:
+        - createTable:
+            tableName: refresh_token
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_refresh_token
+                    nullable: false
+              - column:
+                  name: token_id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_refresh_token_token_id
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_refresh_token_user
+                    references: app_user(id)
+                    deleteCascade: true
+              - column:
+                  name: expires_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revoked_at
+                  type: timestamp with time zone
+              - column:
+                  name: replaced_by
+                  type: varchar(64)
+              - column:
+                  name: user_agent
+                  type: varchar(256)
+              - column:
+                  name: ip_address
+                  type: varchar(64)
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: refresh_token
+            indexName: idx_refresh_token_user
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: refresh_token
+            indexName: idx_refresh_token_expires_at
+            columns:
+              - column:
+                  name: expires_at
+
+  # Счётчик неудачных входов + блокировка учётки после серии попыток.
+  - changeSet:
+      id: 004-app-user-lockout
+      author: devprep
+      changes:
+        - addColumn:
+            tableName: app_user
+            columns:
+              - column:
+                  name: failed_login_attempts
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lockout_until
+                  type: timestamp with time zone
+              - column:
+                  name: password_changed_at
+                  type: timestamp with time zone
+
+  # TOTP-двухфакторка. Секрет хранится в БД; для ROLE_ADMIN включение обязательно
+  # (принудительный enroll на первом входе).
+  - changeSet:
+      id: 004-app-user-totp
+      author: devprep
+      changes:
+        - addColumn:
+            tableName: app_user
+            columns:
+              - column:
+                  name: totp_secret
+                  type: varchar(128)
+              - column:
+                  name: totp_enabled
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+  # Журнал попыток входа — источник данных для rate limit по IP и для аудита.
+  - changeSet:
+      id: 004-login-attempt
+      author: devprep
+      changes:
+        - createTable:
+            tableName: login_attempt
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_login_attempt
+                    nullable: false
+              - column:
+                  name: email
+                  type: varchar(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ip_address
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: successful
+                  type: boolean
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attempted_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: login_attempt
+            indexName: idx_login_attempt_ip_time
+            columns:
+              - column:
+                  name: ip_address
+              - column:
+                  name: attempted_at
+        - createIndex:
+            tableName: login_attempt
+            indexName: idx_login_attempt_email_time
+            columns:
+              - column:
+                  name: email
+              - column:
+                  name: attempted_at

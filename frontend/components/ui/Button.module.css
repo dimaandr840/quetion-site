@@ -1,0 +1,110 @@
+.button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: var(--transition-colors), transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+/* Блик пробегает только по главному действию: движение должно быть
+   мотивировано, а не украшать каждую кнопку на экране. */
+.primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 80%
+  );
+  transform: translateX(-120%);
+  transition: transform var(--dur-slower) var(--ease-out);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    transform: translate3d(0, -1px, 0);
+    box-shadow: var(--shadow-md);
+  }
+
+  .primary:hover:not(:disabled)::after {
+    transform: translateX(120%);
+  }
+}
+
+.button:active:not(:disabled) {
+  transform: translate3d(0, 0, 0) scale(0.97);
+  box-shadow: none;
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* sizes — Large 48px / Medium 40px / Small 32px из макета */
+.large {
+  height: 48px;
+  padding-inline: var(--space-24);
+  font-size: 15px;
+}
+
+.medium {
+  height: 40px;
+  padding-inline: var(--space-24);
+  font-size: 14px;
+}
+
+.small {
+  height: 32px;
+  padding-inline: var(--space-16);
+  font-size: 13px;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  /* Тонированная тень в цвете акцента вместо чёрной. */
+  box-shadow: var(--shadow-accent);
+}
+
+.primary:focus-visible {
+  animation: dp-pulse-ring var(--dur-slower) var(--ease-out);
+}
+
+.outline {
+  background: var(--surface);
+  border-color: var(--border-base);
+  color: var(--text-primary);
+}
+
+.outline:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}

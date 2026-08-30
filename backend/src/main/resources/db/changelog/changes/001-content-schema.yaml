@@ -1,0 +1,381 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-content-schema
+      author: devprep
+      changes:
+        - createTable:
+            tableName: profession
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_profession
+              - column:
+                  name: slug
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_profession_slug
+              - column:
+                  name: emoji
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: page_title
+                  type: varchar(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: card_description
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: question_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sort_order
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+
+        - createTable:
+            tableName: profession_level_count
+            columns:
+              - column:
+                  name: profession_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_level_count_profession
+                    references: profession(id)
+                    deleteCascade: true
+              - column:
+                  name: level
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: question_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: profession_level_count
+            columnNames: profession_id, level
+            constraintName: pk_profession_level_count
+
+        - createTable:
+            tableName: category
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_category
+              - column:
+                  name: slug
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: emoji
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: profession_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_category_profession
+                    references: profession(id)
+                    deleteCascade: true
+              - column:
+                  name: question_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sort_order
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: category
+            columnNames: profession_id, slug
+            constraintName: uq_category_profession_slug
+
+        - createTable:
+            tableName: question
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_question
+              - column:
+                  name: slug
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_question_slug
+              - column:
+                  name: title
+                  type: varchar(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: level
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: profession_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_question_profession
+                    references: profession(id)
+              - column:
+                  name: category_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_question_category
+                    references: category(id)
+              - column:
+                  name: snippet
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tldr
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: popular
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: question
+            indexName: idx_question_profession_category
+            columns:
+              - column:
+                  name: profession_id
+              - column:
+                  name: category_id
+        - createIndex:
+            tableName: question
+            indexName: idx_question_level
+            columns:
+              - column:
+                  name: level
+
+        - createTable:
+            tableName: question_tag
+            columns:
+              - column:
+                  name: question_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_question_tag_question
+                    references: question(id)
+                    deleteCascade: true
+              - column:
+                  name: tag
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: question_tag
+            columnNames: question_id, tag
+            constraintName: pk_question_tag
+        - createIndex:
+            tableName: question_tag
+            indexName: idx_question_tag_tag
+            columns:
+              - column:
+                  name: tag
+
+        - createTable:
+            tableName: answer_section
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_answer_section
+              - column:
+                  name: section_key
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: heading
+                  type: varchar(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: question_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_answer_section_question
+                    references: question(id)
+                    deleteCascade: true
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code_language
+                  type: varchar(32)
+              - column:
+                  name: code_title
+                  type: varchar(256)
+              - column:
+                  name: code_body
+                  type: text
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: answer_section
+            indexName: idx_answer_section_question
+            columns:
+              - column:
+                  name: question_id
+
+        - createTable:
+            tableName: answer_section_paragraph
+            columns:
+              - column:
+                  name: section_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_paragraph_section
+                    references: answer_section(id)
+                    deleteCascade: true
+              - column:
+                  name: paragraph
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: answer_section_paragraph
+            columnNames: section_id, position
+            constraintName: pk_answer_section_paragraph
+
+        - createTable:
+            tableName: answer_section_bullet
+            columns:
+              - column:
+                  name: section_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_bullet_section
+                    references: answer_section(id)
+                    deleteCascade: true
+              - column:
+                  name: bullet
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: answer_section_bullet
+            columnNames: section_id, position
+            constraintName: pk_answer_section_bullet

@@ -1,0 +1,201 @@
+databaseChangeLog:
+  # Новая иерархия каталога: Сфера → Профессия → Специализация → Тема → Вопрос.
+  # Таблицы создаются пустыми, поэтому связи заполняются в два шага: сначала
+  # nullable-колонка, затем backfill из seed-совместимых значений по умолчанию,
+  # и только после этого NOT NULL.
+  - changeSet:
+      id: 005-industry-specialization
+      author: devprep
+      changes:
+        - createTable:
+            tableName: industry
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_industry
+              - column:
+                  name: slug
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_industry_slug
+              - column:
+                  name: emoji
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sort_order
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+
+        - createTable:
+            tableName: specialization
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_specialization
+              - column:
+                  name: slug
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: profession_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_specialization_profession
+                    references: profession(id)
+                    deleteCascade: true
+              - column:
+                  name: sort_order
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: specialization
+            columnNames: profession_id, slug
+            constraintName: uq_specialization_profession_slug
+
+        - addColumn:
+            tableName: profession
+            columns:
+              - column:
+                  name: industry_id
+                  type: bigint
+              - column:
+                  name: featured
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+        - addColumn:
+            tableName: category
+            columns:
+              - column:
+                  name: specialization_id
+                  type: bigint
+
+  # Для непустой базы: одна сфера-заглушка и по одной специализации на профессию,
+  # чтобы NOT NULL можно было включить не потеряв существующий контент.
+  - changeSet:
+      id: 005-backfill-hierarchy
+      author: devprep
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 1
+            sql: select case when exists (select 1 from profession) then 1 else 0 end
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              insert into industry (slug, emoji, title, description, sort_order, created_at, updated_at)
+              values ('it', '💻', 'IT и разработка', 'Разработка, тестирование, инфраструктура и работа с данными.', 0, now(), now())
+              on conflict (slug) do nothing;
+
+              update profession
+                 set industry_id = (select id from industry where slug = 'it')
+               where industry_id is null;
+
+              insert into specialization (slug, title, description, profession_id, sort_order, created_at, updated_at)
+              select 'general', 'Основные темы', 'Темы профессии до разбивки по специализациям.', p.id, 0, now(), now()
+                from profession p
+               where not exists (select 1 from specialization s where s.profession_id = p.id and s.slug = 'general');
+
+              update category c
+                 set specialization_id = (
+                       select s.id from specialization s
+                        where s.profession_id = c.profession_id and s.slug = 'general')
+               where c.specialization_id is null;
+
+  - changeSet:
+      id: 005-hierarchy-constraints
+      author: devprep
+      changes:
+        - addNotNullConstraint:
+            tableName: profession
+            columnName: industry_id
+            columnDataType: bigint
+        - addForeignKeyConstraint:
+            baseTableName: profession
+            baseColumnNames: industry_id
+            constraintName: fk_profession_industry
+            referencedTableName: industry
+            referencedColumnNames: id
+        - addNotNullConstraint:
+            tableName: category
+            columnName: specialization_id
+            columnDataType: bigint
+        - addForeignKeyConstraint:
+            baseTableName: category
+            baseColumnNames: specialization_id
+            constraintName: fk_category_specialization
+            referencedTableName: specialization
+            referencedColumnNames: id
+        - createIndex:
+            tableName: profession
+            indexName: idx_profession_industry
+            columns:
+              - column:
+                  name: industry_id
+        - createIndex:
+            tableName: category
+            indexName: idx_category_specialization
+            columns:
+              - column:
+                  name: specialization_id

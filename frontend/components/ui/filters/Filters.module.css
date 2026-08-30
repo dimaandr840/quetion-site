@@ -1,0 +1,732 @@
+/* ============================================================================
+   Фильтр — переосмысление.
+
+   Задача компонента — не «собрать запрос и отправить форму», а дать
+   ответ на три вопроса без клика: что включено, сколько осталось,
+   что будет, если нажать ещё.
+
+   SHAPE CONSISTENCY LOCK: только --radius-control / --radius-surface /
+   --radius-shell / --radius-pill. Никаких --radius-6 и --radius-12.
+   ========================================================================== */
+
+.root {
+  position: sticky;
+  top: calc(var(--header-h) + var(--space-16));
+  display: block;
+}
+
+/* ---------- Панель ---------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-shell);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow var(--dur-base) var(--ease-out);
+}
+
+.panel[data-pending="true"] {
+  box-shadow: var(--shadow-md);
+}
+
+/* Шапка: заголовок + счётчик активных + сброс. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-16) var(--space-12);
+  border-bottom: 1px solid var(--border-base);
+  background: var(--surface-muted);
+}
+
+.headTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0;
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.activeCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.reset {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding-inline: var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.reset:hover {
+  background: var(--surface);
+  border-color: var(--border-base);
+  color: var(--text-primary);
+}
+
+/* ---------- Группы ---------- */
+
+.body {
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-16);
+  border: 0;
+  border-bottom: 1px solid var(--border-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.group:last-child {
+  border-bottom: 0;
+}
+
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  width: 100%;
+  padding: 0;
+}
+
+.groupLabel {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.groupClear {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.groupClear:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Сложность: сегменты вместо чекбоксов ----------
+   Три взаимоисключающиеся по смыслу значения с готовым цветовым
+   кодом из LevelBadge — это одно решение, а не три галочки. */
+
+.levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  /* Справа оставлено место под галочку в углу. */
+  padding: var(--space-8) 20px var(--space-8) 10px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-colors),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .level:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+}
+
+.level:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.level[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.level:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.levelName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Цвет — не единственный носитель смысла: рядом всегда есть текст. */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotJunior {
+  background: var(--success-main);
+}
+
+.dotMiddle {
+  background: var(--warning-main);
+}
+
+.dotSenior {
+  background: var(--error-main);
+}
+
+.levelCount {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.level[aria-pressed="true"] .levelCount {
+  color: var(--accent-on-soft);
+}
+
+.check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+/* ---------- Инлайн-вариант для страницы темы ----------
+   Те же плитки, без панели: один визуальный язык на всех экранах. */
+
+.inlineGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.inlineLevels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.inlineLevels .level {
+  flex: 0 0 auto;
+  min-width: 116px;
+  min-height: 48px;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-8);
+  padding-inline: var(--space-12);
+}
+
+.inlineLevels .levelCount {
+  margin-left: auto;
+}
+
+.inlineLevels .check {
+  position: static;
+  order: 3;
+}
+
+/* ---------- Тумблер «Только популярные» ---------- */
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.switchTrack {
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  transition: var(--transition-colors);
+}
+
+.switchRow[aria-pressed="true"] .switchTrack {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+
+.switchRow[aria-pressed="true"] .switchThumb {
+  transform: translateX(16px);
+}
+
+.switchMeta {
+  margin-left: auto;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---------- Профессии: список с поиском ----------
+   Длинный список — причина сменить компонент, а не сделать его длиннее. */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchInput {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 32px 0 var(--space-12);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: var(--transition-colors);
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.searchInput:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.searchClear {
+  position: absolute;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.searchClear:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 244px;
+  overflow-y: auto;
+  margin-inline: calc(var(--space-8) * -1);
+  padding-inline: var(--space-8);
+  overscroll-behavior: contain;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+@media (hover: hover) {
+  .row:hover:not(:disabled) {
+    background: var(--surface-muted);
+    color: var(--text-primary);
+  }
+}
+
+.row[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+  font-weight: 600;
+}
+
+.row:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Свой бокс вместо системного 14×14 чекбокса: видно в тёмной теме. */
+.box {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+  color: transparent;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  transition: var(--transition-colors);
+}
+
+.row[aria-pressed="true"] .box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+.rowTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowCount {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.row[aria-pressed="true"] .rowCount {
+  color: var(--accent-on-soft);
+}
+
+.more {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.more:hover {
+  text-decoration: underline;
+}
+
+.noMatch {
+  padding-block: var(--space-8);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Подвал: честный результат ---------- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-top: 1px solid var(--border-base);
+  background: var(--surface-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.footerValue {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.spinner {
+  margin-left: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-soft-border);
+  border-top-color: var(--accent);
+  animation: dp-spin 620ms linear infinite;
+}
+
+/* Без JS фильтрам нужна кнопка — с JS она лишний шаг. */
+.noscriptApply {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Мобильный триггер и шит ---------- */
+
+/* На широком экране панель всегда открыта, поэтому всё управление шитом
+   (триггер, затемнение, крестик, ручка, CTA) скрыто. */
+.trigger,
+.backdrop,
+.close,
+.grabber,
+.sheetCta {
+  display: none;
+}
+
+@media (max-width: 1000px) {
+  .root {
+    position: static;
+  }
+
+  /* На узком экране панель фильтров не должна стоять стеной
+     между заголовком и результатами: она уезжает в шит. */
+  .trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    padding-inline: var(--space-16);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+  }
+
+  .trigger[data-active="true"] {
+    border-color: var(--accent);
+    color: var(--accent-on-soft);
+    background: var(--accent-soft);
+  }
+
+  .panel {
+    position: fixed;
+    z-index: 60;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 88dvh;
+    border-radius: var(--radius-shell) var(--radius-shell) 0 0;
+    border-bottom: 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(101%);
+    visibility: hidden;
+    transition: transform var(--dur-base) var(--ease-emphasized),
+      visibility var(--dur-base) linear;
+  }
+
+  .root[data-open="true"] .panel {
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    border: 0;
+    padding: 0;
+    background: rgba(2, 6, 23, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur-base) var(--ease-standard),
+      visibility var(--dur-base) linear;
+  }
+
+  .root[data-open="true"] .backdrop {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Шит прокручивается внутри, шапка и CTA остаются на месте. */
+  .body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .list {
+    max-height: none;
+  }
+
+  .sheetHead {
+    display: flex;
+  }
+
+  .grabber {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+  }
+
+  .head {
+    padding-top: var(--space-24);
+  }
+
+  .close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sheetCta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--text-inverse);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-8);
+    padding-bottom: max(var(--space-16), env(safe-area-inset-bottom));
+  }
+
+  .footerLine {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+}
+
+@media (min-width: 1001px) {
+  .footerLine {
+    display: contents;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

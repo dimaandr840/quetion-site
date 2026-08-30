@@ -1,0 +1,516 @@
+/* ============================================================================
+   Система движения DevPrep.
+
+   Единый источник правды для длительностей, кривых и переиспользуемых
+   анимаций. Правила специально построены как «progressive enhancement»:
+   без поддержки scroll-driven анимаций (animation-timeline: view())
+   контент виден сразу, а при prefers-reduced-motion всё движение
+   выключается целиком.
+   ========================================================================== */
+
+:root {
+  /* Длительности */
+  --dur-instant: 90ms;
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --dur-slower: 720ms;
+
+  /* Кривые: standard — базовый переход, spring — «живой» отклик,
+     emphasized — акцентные появления, out — затухание. */
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  /* Переиспользуемые составные переходы */
+  --transition-colors: color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+  --transition-lift: transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-standard);
+
+  /* Смещения появления */
+  --reveal-shift: 18px;
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes dp-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dp-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--reveal-shift), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dp-fade-down {
+  from {
+    opacity: 0;
+    transform: translate3d(0, calc(var(--reveal-shift) * -1), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dp-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dp-slide-left {
+  from {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dp-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes dp-gradient-pan {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes dp-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) scale(1.03);
+  }
+}
+
+@keyframes dp-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-soft-border);
+  }
+  70% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@keyframes dp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dp-progress-indeterminate {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.7);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
+  }
+}
+
+@keyframes dp-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* ---------- Утилиты появления при загрузке ---------- */
+
+.animate-in {
+  animation: dp-fade-up var(--dur-slow) var(--ease-out) both;
+}
+
+.animate-fade {
+  animation: dp-fade-in var(--dur-slow) var(--ease-standard) both;
+}
+
+.animate-scale {
+  animation: dp-scale-in var(--dur-base) var(--ease-spring) both;
+}
+
+/* Каскад: задержки задаются на потомках, чтобы блок «собирался» по частям. */
+.stagger > * {
+  animation: dp-fade-up var(--dur-slow) var(--ease-out) both;
+}
+
+.stagger > *:nth-child(1) {
+  animation-delay: 40ms;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 100ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 160ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 220ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 280ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 340ms;
+}
+.stagger > *:nth-child(7) {
+  animation-delay: 400ms;
+}
+.stagger > *:nth-child(8) {
+  animation-delay: 460ms;
+}
+
+/* ---------- Scroll-driven появление ----------
+   Без JS и без IntersectionObserver. Если браузер не умеет
+   animation-timeline, блок просто виден — деградация безопасная. */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: dp-fade-up var(--dur-slower) var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 26%;
+    }
+
+    .reveal-scale {
+      animation: dp-scale-in var(--dur-slower) var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 24%;
+    }
+
+    /* Каскад по элементам сетки: каждый следующий догоняет чуть позже. */
+    .reveal-children > * {
+      animation: dp-fade-up var(--dur-slower) var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 22%;
+    }
+  }
+}
+
+/* ---------- Микроинтеракции ---------- */
+
+.hover-lift {
+  transition: var(--transition-lift);
+}
+
+@media (hover: hover) {
+  .hover-lift:hover {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+
+.hover-lift:active {
+  transform: translate3d(0, 0, 0) scale(0.995);
+}
+
+/* Подчёркивание, растущее от левого края — для текстовых ссылок. */
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* Градиентный акцент для заголовков. */
+.gradient-text {
+  background: linear-gradient(
+    100deg,
+    var(--text-primary) 0%,
+    var(--accent) 45%,
+    var(--text-primary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gradient-text {
+    animation: dp-gradient-pan 9s linear infinite alternate;
+  }
+}
+
+/* Скелет загрузки. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted) 0%,
+    var(--surface-raised) 50%,
+    var(--surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: dp-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-8);
+}
+
+/* ---------- Уважение к настройкам пользователя ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ============================================================================
+   Слой 2 — движение и материалы.
+
+   • Kinetic typography по словам (taste-skill) — только CSS-задержки.
+   • Pointer spotlight — блик следует за курсором через --mx/--my.
+   • Magnetic press на интерактивных поверхностях.
+   • Liquid-glass слой с фолбэком.
+   • «Motion must be motivated»: один shine на входе вместо бесконечного
+     градиента; marquee — максимум один на страницу.
+   ========================================================================== */
+
+:root {
+  /* Позиция курсора внутри spotlight-контейнера; дефолт — центр сверху. */
+  --mx: 50%;
+  --my: 0%;
+  --ease-magnetic: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- Kinetic headline ---------- */
+
+.kinetic {
+  display: inline;
+}
+
+.kinetic-word {
+  display: inline-block;
+  white-space: pre;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .kinetic-word {
+    animation: dp-word-in 620ms var(--ease-out) both;
+    animation-delay: calc(var(--word-index, 0) * 55ms + 80ms);
+  }
+}
+
+@keyframes dp-word-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.42em, 0) rotate(1.4deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0);
+    filter: blur(0);
+  }
+}
+
+/* Акцентное слово: подсветка маркером, а не сменой шрифта
+   и не прозрачным градиентным текстом (контраст сохраняется). */
+.kinetic-accent {
+  position: relative;
+  isolation: isolate;
+  color: var(--accent-on-soft, var(--accent));
+}
+
+.kinetic-accent::after {
+  content: "";
+  position: absolute;
+  left: -0.06em;
+  right: -0.06em;
+  bottom: 0.06em;
+  height: 0.26em;
+  z-index: -1;
+  border-radius: 0.25em;
+  background: var(--accent-soft);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .kinetic-accent::after {
+    animation: dp-marker 520ms var(--ease-out) 620ms both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kinetic-accent::after {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes dp-marker {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ---------- Pointer spotlight ---------- */
+
+.spotlight-scope {
+  position: relative;
+}
+
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    320px circle at var(--mx) var(--my),
+    var(--glow-accent) 0%,
+    transparent 68%
+  );
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-standard);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .spotlight-scope:hover .spotlight::before {
+    opacity: 1;
+  }
+}
+
+/* ---------- Magnetic / tactile ---------- */
+
+.magnetic {
+  transition: transform var(--dur-base) var(--ease-magnetic),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .magnetic:hover {
+    transform: translate3d(0, -2px, 0) scale(1.012);
+  }
+}
+
+.magnetic:active {
+  transform: translate3d(0, 0, 0) scale(0.985);
+}
+
+/* ---------- Стекло ---------- */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset), var(--shadow-md);
+  backdrop-filter: saturate(150%) blur(var(--glass-blur));
+  -webkit-backdrop-filter: saturate(150%) blur(var(--glass-blur));
+}
+
+/* ---------- Один shine на входе вместо бесконечной анимации ---------- */
+
+.shine-once {
+  background: linear-gradient(
+    100deg,
+    var(--text-primary) 0%,
+    var(--accent) 42%,
+    var(--text-primary) 82%
+  );
+  background-size: 220% 100%;
+  background-position: 100% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shine-once {
+    animation: dp-gradient-pan 1.6s var(--ease-out) 1 both;
+  }
+}
+
+/* ---------- Marquee (максимум один на страницу) ---------- */
+
+.marquee {
+  display: flex;
+  gap: var(--space-24);
+  width: max-content;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .marquee {
+    animation: dp-marquee 38s linear infinite;
+  }
+
+  .marquee:hover {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes dp-marquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}

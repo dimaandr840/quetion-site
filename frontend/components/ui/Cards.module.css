@@ -1,0 +1,280 @@
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-24);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-24);
+}
+
+.card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-24);
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-lift);
+}
+
+/* Световой блик следует за курсором: --mx/--my пишет SpotlightScope.
+   z-index: -1 + isolation держат его под текстом. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, -20%),
+    var(--accent-soft) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-standard);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .card:hover {
+    border-color: var(--accent-soft-border);
+    box-shadow: var(--shadow-lg);
+    transform: translate3d(0, -4px, 0);
+  }
+
+  .card:hover::before {
+    opacity: 1;
+  }
+
+  .card:hover .emoji {
+    transform: translate3d(0, -2px, 0) scale(1.06) rotate(-4deg);
+    background: var(--accent-soft);
+  }
+
+  .card:hover .more svg {
+    transform: translate3d(4px, 0, 0);
+  }
+}
+
+.card:focus-within {
+  border-color: var(--accent-soft-border);
+}
+
+.emoji {
+  transition: transform var(--dur-base) var(--ease-spring),
+    background-color var(--dur-base) var(--ease-standard);
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.cardTitle {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cardText {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: auto;
+  padding-top: var(--space-8);
+}
+
+.count {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.soon {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  transition: var(--transition-colors);
+}
+
+.more svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.more:hover {
+  color: var(--accent-hover);
+}
+
+/* question card — используется в списках и результатах поиска */
+.questionCard {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-24);
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-lift);
+}
+
+/* Акцентная полоса слева вырастает при наведении и при фокусе с клавиатуры. */
+.questionCard::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  transform: scaleY(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .questionCard:hover {
+    border-color: var(--accent-soft-border);
+    box-shadow: var(--shadow-lg);
+    transform: translate3d(0, -2px, 0);
+  }
+
+  .questionCard:hover::after {
+    transform: scaleY(1);
+  }
+
+  .questionCard:hover .path svg {
+    transform: translate3d(3px, 0, 0);
+  }
+}
+
+.questionCard:focus-within {
+  border-color: var(--accent-soft-border);
+}
+
+.questionCard:focus-within::after {
+  transform: scaleY(1);
+}
+
+.path svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.questionTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.path {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.questionTitle {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.questionTitle:hover {
+  color: var(--accent);
+}
+
+.snippet {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+/* compact card — related questions (3 в ряд) */
+.compactCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-control);
+  transition: var(--transition-lift);
+}
+
+@media (hover: hover) {
+  .compactCard:hover {
+    transform: translate3d(0, -2px, 0);
+    border-color: var(--accent-soft-border);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.compactTitle {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.compactCard:hover .compactTitle {
+  color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .grid3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .grid3,
+  .grid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,351 @@
+/* ============================================================================
+   Главная страница.
+
+   Аудит по taste-skill выявил три «AI-tell», исправленные здесь:
+   1. Центрированный герой поверх двух плавающих градиентных пятен →
+      асимметричный сплит, один источник света и точечная сетка.
+   2. Семь текстовых блоков в герое → ровно четыре; цифры и пилюли
+      вынесены в отдельную полосу ниже.
+   3. Повтор одного семейства лэйаута → пять разных: сплит, полоса
+      цифр, сетка карточек, вертикальный список, горизонтальный rail.
+
+   Диалы: DESIGN_VARIANCE 7 / MOTION 5 / DENSITY 5.
+   ========================================================================== */
+
+.heroWrap {
+  position: relative;
+  overflow: clip;
+  isolation: isolate;
+}
+
+/* Фактура фона: точечная сетка, затухающая к низу. */
+.heroWrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 82%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 82%);
+  pointer-events: none;
+}
+
+/* Одно свечение, смещённое влево-вверх: свет идёт из одного источника
+   и никуда не плывёт без причины. */
+.heroWrap::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -240px;
+  left: -120px;
+  width: 720px;
+  height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--glow-accent) 0%, transparent 68%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+/* Асимметричный сплит: 1.05fr / 0.95fr читается как решение, а не как 50/50. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(32px, 4vw, 72px);
+  padding-block: clamp(56px, 7vw, 104px) clamp(40px, 5vw, 72px);
+}
+
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.heroTitle {
+  margin: 0;
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.heroSubtitle {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--text-secondary);
+}
+
+.heroSearch {
+  width: 100%;
+  max-width: 520px;
+  margin-top: var(--space-4);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-24);
+}
+
+/* Вторичное действие — текстовая ссылка, а не вторая равновесная кнопка. */
+.heroLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: var(--transition-colors), gap var(--dur-base) var(--ease-out);
+}
+
+.heroLink svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.heroLink:hover {
+  color: var(--accent);
+  gap: 10px;
+}
+
+/* ---------- Колода реальных карточек ----------
+   Превью собрано из того же QuestionCard, что работает в каталоге.
+   Колода выравнивается при hover и focus — движение мотивировано. */
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.deckLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.deckStack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.deckItem {
+  transform-origin: left center;
+  transform: rotate(calc((var(--card-index) - 1) * 0.85deg))
+    translate3d(calc(var(--card-index) * 10px), 0, 0);
+  transition: transform var(--dur-slow) var(--ease-magnetic),
+    opacity var(--dur-slow) var(--ease-out);
+}
+
+.deckItem:nth-child(3) {
+  opacity: 0.72;
+}
+
+@media (hover: hover) {
+  .deckStack:hover .deckItem,
+  .deckStack:focus-within .deckItem {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deckItem {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- Полоса цифр и подсказок поиска ---------- */
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding-block: var(--space-32);
+  border-block: 1px solid var(--border-base);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-24);
+  margin: 0;
+}
+
+/* Вертикальные разделители вместо четырёх одинаковых карточек-статистик. */
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-16);
+  border-left: 1px solid var(--border-base);
+}
+
+.fact:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.factValue {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: clamp(24px, 1.2rem + 1vw, 32px);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.factLabel {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.popular {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.popularLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+/* ---------- Общие секции ---------- */
+
+.section {
+  padding-block: var(--space-64);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-24);
+  margin-bottom: var(--space-32);
+}
+
+.sectionTitle {
+  margin: 0;
+  position: relative;
+  padding-left: var(--space-16);
+}
+
+.sectionTitle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--indigo-400) 100%);
+}
+
+.sectionSubtitle {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.sectionHint {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sectionLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  transition: var(--transition-colors), gap var(--dur-base) var(--ease-out);
+}
+
+.sectionLink svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.sectionLink:hover {
+  color: var(--accent-hover);
+  gap: 10px;
+}
+
+.sectionLink:hover svg {
+  transform: translate3d(2px, 0, 0);
+}
+
+.questionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* ---------- Адаптивность: 1440 / 1024 / 768 / 375 ---------- */
+
+@media (max-width: 1080px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-32);
+  }
+
+  .heroTitle {
+    max-width: 24ch;
+  }
+
+  .deckItem {
+    transform: none;
+  }
+
+  .deckItem:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16);
+  }
+
+  .fact:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .section {
+    padding-block: var(--space-32);
+  }
+
+  .sectionHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-12);
+  }
+}
+
+@media (max-width: 520px) {
+  .heroSearch {
+    max-width: none;
+  }
+
+  .heroActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

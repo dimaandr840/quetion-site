@@ -1,0 +1,300 @@
+.wrap {
+  padding-block: var(--space-32) var(--space-80);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.topic {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.topicLink {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.title {
+  margin: 0;
+  max-width: 840px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 840px) 272px;
+  gap: var(--space-48);
+  align-items: start;
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.tldr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-24);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--radius-12);
+}
+
+.tldrLabel {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-on-soft);
+}
+
+.tldrText {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  scroll-margin-top: calc(var(--header-h) + var(--space-24));
+}
+
+.sectionHeading {
+  margin: 0;
+}
+
+.paragraph {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+.bullets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-left: var(--space-24);
+  list-style: disc;
+}
+
+.bullets li {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.bullets code {
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: var(--radius-4);
+  background: var(--surface-muted);
+  color: var(--accent-on-soft);
+}
+
+/* ---- Инлайн-разметка из редактора админки ---- */
+
+.paragraph code {
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: var(--radius-4);
+  background: var(--surface-muted);
+  color: var(--accent-on-soft);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+.paragraph strong,
+.bullets strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.paragraph mark,
+.bullets mark {
+  padding: 0 3px;
+  border-radius: var(--radius-4);
+  background: var(--warning-light);
+  color: var(--text-primary);
+}
+
+.paragraph a,
+.bullets a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.paragraph a:hover,
+.bullets a:hover {
+  color: var(--accent-hover);
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: task;
+}
+
+.task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-24);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-12);
+  counter-increment: task;
+}
+
+.taskTitle {
+  margin: 0;
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.taskTitle::before {
+  content: "Задание " counter(task) ". ";
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.hint {
+  border-top: 1px solid var(--border-base);
+  padding-top: var(--space-12);
+}
+
+.hintSummary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.hintText {
+  margin: var(--space-8) 0 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.toc {
+  position: sticky;
+  top: calc(var(--header-h) + var(--space-24));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tocTitle {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.tocList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  border-left: 2px solid var(--border-base);
+}
+
+.tocLink {
+  display: block;
+  padding: 4px 0 4px var(--space-12);
+  margin-left: -2px;
+  border-left: 2px solid transparent;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.tocLink:hover {
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+.siblings {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--border-base);
+}
+
+.sibling {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 380px;
+}
+
+.siblingNext {
+  text-align: right;
+  margin-left: auto;
+}
+
+.siblingLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.siblingTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sibling:hover .siblingTitle {
+  color: var(--accent);
+}
+
+.related {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.relatedTitle {
+  margin: 0;
+}
+
+@media (max-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toc {
+    position: static;
+    order: -1;
+  }
+}

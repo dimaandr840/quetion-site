@@ -1,0 +1,396 @@
+import { apiFetch } from "./api";
+import { sanitizeInlineHtml, stripInlineHtml } from "./inline-html";
+import type { Level } from "./types";
+
+export interface AnswerSectionPayload {
+  id?: string;
+  heading?: string;
+  paragraphs?: string[];
+  bullets?: string[];
+  code?: { language: string; title: string; lines: string[] };
+}
+
+export interface QuestionUpsertPayload {
+  slug: string;
+  title: string;
+  level: Level;
+  professionSlug: string;
+  categorySlug: string;
+  tags: string[];
+  snippet: string;
+  tldr: string;
+  popular: boolean;
+  published: boolean;
+  sections: AnswerSectionPayload[];
+}
+
+/** Строка админской таблицы, как её отдаёт GET /api/admin/questions. */
+export interface AdminQuestionRowDto {
+  slug: string;
+  title: string;
+  professionSlug: string;
+  professionTitle: string;
+  categorySlug: string;
+  categoryTitle: string;
+  level: Level;
+  published: boolean;
+  createdAt: string;
+}
+
+/** Полный вопрос для режима редактирования. */
+export interface AdminQuestionDetailDto {
+  slug: string;
+  title: string;
+  level: Level;
+  professionSlug: string;
+  categorySlug: string;
+  tags: string[];
+  popular: boolean;
+  published?: boolean;
+  sections: AnswerSectionPayload[];
+}
+
+/** Заголовок по умолчанию, если админ не выделил в ответе ни одного H1/H2. */
+const DEFAULT_SECTION_HEADING = "Ответ";
+
+const CYRILLIC_MAP: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh",
+  з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o",
+  п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "c",
+  ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu",
+  я: "ya",
+};
+
+/** Транслитерация заголовка в slug: бэкенд требует его, а форма не спрашивает. */
+export function slugify(title: string): string {
+  const base = title
+    .toLocaleLowerCase("ru")
+    .split("")
+    .map((char) => CYRILLIC_MAP[char] ?? char)
+    .join("")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return (base || "question").slice(0, 110);
+}
+
+function textOf(element: Element): string {
+  return (element.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Содержимое блока вместе с инлайн-разметкой: курсив, полужирный, строчный код,
+ * выделение и ссылки. Разметка проходит через санитайзер сразу при сохранении,
+ * поэтому в базу не попадает ничего, кроме разрешённых тегов.
+ */
+function inlineOf(element: Element): string {
+  const html = sanitizeInlineHtml(element.innerHTML).replace(/\s+/g, " ").trim();
+  // Разметка без текста (например, пустой <strong>) считается пустым блоком.
+  return stripInlineHtml(html) ? html : "";
+}
+
+/** Теги, которые начинают новый блок. Всё остальное считается инлайновым. */
+const BLOCK_TAGS = new Set([
+  "h1", "h2", "h3", "h4", "p", "div", "ul", "ol", "pre", "blockquote",
+  "section", "article", "figure", "table", "hr",
+]);
+
+function isBlockNode(node: Node): boolean {
+  return (
+    node.nodeType === Node.ELEMENT_NODE &&
+    BLOCK_TAGS.has((node as Element).tagName.toLowerCase())
+  );
+}
+
+function hasBlockChild(element: Element): boolean {
+  return Array.from(element.childNodes).some(isBlockNode);
+}
+
+/**
+ * Текст блока кода построчно. В contenteditable перевод строки внутри {@code <pre>}
+ * — это {@code <br>} или вложенный {@code <div>}, а textContent их склеивает.
+ */
+function codeLines(element: Element): string[] {
+  const clone = element.cloneNode(true) as Element;
+  for (const br of Array.from(clone.querySelectorAll("br"))) {
+    br.replaceWith(document.createTextNode("\n"));
+  }
+  for (const block of Array.from(clone.querySelectorAll("div, p"))) {
+    block.appendChild(document.createTextNode("\n"));
+  }
+
+  const lines = (clone.textContent ?? "").replace(/\r/g, "").split("\n");
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+  return lines;
+}
+
+/**
+ * Разбивает содержимое блока по {@code <br>} на отдельные строки с инлайн-разметкой.
+ * Каждая строка становится самостоятельным абзацем.
+ */
+function splitByBreaks(element: Element): string[] {
+  const parts: string[] = [];
+  let holder = document.createElement("div");
+
+  const flush = () => {
+    const markup = inlineOf(holder);
+    if (markup) parts.push(markup);
+    holder = document.createElement("div");
+  };
+
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName.toLowerCase() === "br") {
+      flush();
+      continue;
+    }
+    holder.appendChild(node.cloneNode(true));
+  }
+  flush();
+
+  return parts;
+}
+
+/**
+ * Разбирает HTML из contenteditable-редактора в секции ответа.
+ * Каждый h1/h2 начинает новую секцию; абзацы, списки и блоки кода
+ * попадают в текущую.
+ */
+export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
+  const root = document.createElement("div");
+  // Строка формируется самим редактором в этом же документе и никуда не
+  // вставляется как разметка — используется только для чтения текста.
+  root.innerHTML = html;
+
+  const sections: AnswerSectionPayload[] = [];
+  let current: AnswerSectionPayload | null = null;
+  let index = 0;
+
+  function ensure(heading?: string): AnswerSectionPayload {
+    if (!current || heading !== undefined) {
+      index += 1;
+      current = {
+        id: `section-${index}`,
+        heading,
+        paragraphs: [],
+        bullets: [],
+      };
+      sections.push(current);
+    }
+    return current;
+  }
+
+  /**
+   * Редактор охотно вкладывает блоки друг в друга: список после Enter уезжает
+   * внутрь <div>, код — внутрь <pre> с <br>. Поэтому обход рекурсивный, а не по
+   * верхнему уровню: иначе вложенный <ul> схлопывался в текст и пункты пропадали.
+   */
+  function walk(nodes: Node[]) {
+    // Голый текст между блоками (в том числе первая строка, пока не нажат Enter)
+    // копится и сбрасывается одним абзацем.
+    let inline: Node[] = [];
+
+    function flushInline() {
+      if (inline.length === 0) return;
+      const holder = document.createElement("div");
+      for (const node of inline) holder.appendChild(node.cloneNode(true));
+      inline = [];
+      const lines = splitByBreaks(holder);
+      if (lines.length === 0) return;
+      const section = ensure();
+      for (const line of lines) {
+        section.paragraphs?.push(line);
+      }
+    }
+
+    for (const node of nodes) {
+      if (!isBlockNode(node)) {
+        inline.push(node);
+        continue;
+      }
+
+      flushInline();
+      const element = node as Element;
+      const tag = element.tagName.toLowerCase();
+
+      if (tag === "hr") {
+        continue;
+      }
+
+      if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4") {
+        ensure(textOf(element) || undefined);
+        continue;
+      }
+
+      if (tag === "ul" || tag === "ol") {
+        const section = ensure();
+        for (const item of Array.from(element.querySelectorAll("li"))) {
+          const markup = inlineOf(item);
+          if (markup) section.bullets?.push(markup);
+        }
+        continue;
+      }
+
+      if (tag === "pre") {
+        const section = ensure();
+        const lines = codeLines(element);
+        if (lines.length > 0) {
+          section.code = { language: "java", title: "Пример", lines };
+        }
+        continue;
+      }
+
+      // Отдельного поля для цитаты в модели ответа нет, поэтому строки цитаты
+      // сохраняются абзацами — иначе они склеивались бы в один.
+      if (tag === "blockquote") {
+        const lines = splitByBreaks(element);
+        if (lines.length === 0) continue;
+        const section = ensure();
+        for (const line of lines) {
+          section.paragraphs?.push(line);
+        }
+        continue;
+      }
+
+      if (hasBlockChild(element)) {
+        walk(Array.from(element.childNodes));
+        continue;
+      }
+
+      const lines = splitByBreaks(element);
+      if (lines.length === 0) continue;
+      const section = ensure();
+      for (const line of lines) {
+        section.paragraphs?.push(line);
+      }
+    }
+
+    flushInline();
+  }
+
+  walk(Array.from(root.childNodes));
+
+  return sections.map((section) => ({
+    ...section,
+    // Бэкенд требует непустой заголовок секции (@NotBlank), а ответ без H1/H2
+    // — обычный случай. Подставляем нейтральный заголовок вместо ошибки 400.
+    heading: section.heading?.trim() ? section.heading.trim() : DEFAULT_SECTION_HEADING,
+    paragraphs: section.paragraphs?.length ? section.paragraphs : undefined,
+    bullets: section.bullets?.length ? section.bullets : undefined,
+  }));
+}
+
+function plainText(sections: AnswerSectionPayload[]): string {
+  return sections
+    .flatMap((section) => [
+      section.heading ?? "",
+      ...(section.paragraphs ?? []),
+      ...(section.bullets ?? []),
+    ])
+    .filter(Boolean)
+    // snippet и tldr идут в поиск и в мета-описания — там разметка не нужна.
+    .map(stripInlineHtml)
+    .join(" ")
+    .trim();
+}
+
+export function buildQuestionPayload(input: {
+  title: string;
+  level: Level;
+  professionSlug: string;
+  categorySlug: string;
+  tags: string;
+  answerHtml: string;
+  published: boolean;
+  slug?: string;
+}): QuestionUpsertPayload {
+  const sections = parseAnswerHtml(input.answerHtml);
+  const flat = plainText(sections);
+
+  return {
+    // При редактировании slug сохраняем: он уже в ссылках и в индексе поиска.
+    slug: input.slug ?? slugify(input.title),
+    title: input.title.trim(),
+    level: input.level,
+    professionSlug: input.professionSlug,
+    categorySlug: input.categorySlug,
+    tags: input.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    // Форма не собирает отдельные «краткий ответ» и «превью» — выводим их
+    // из текста ответа, как это делает сид базы знаний.
+    snippet: flat.slice(0, 1024) || input.title.trim(),
+    tldr:
+      stripInlineHtml(sections[0]?.paragraphs?.[0] ?? "") ||
+      flat.slice(0, 512) ||
+      input.title.trim(),
+    popular: false,
+    published: input.published,
+    sections,
+  };
+}
+
+/**
+ * Обратное преобразование секций в HTML редактора — нужно для режима
+ * редактирования. Инлайн-разметка уже санитизирована при сохранении,
+ * но прогоняем её ещё раз: содержимое приходит по сети.
+ */
+export function sectionsToHtml(sections: AnswerSectionPayload[]): string {
+  const parts: string[] = [];
+
+  for (const section of sections) {
+    if (section.heading) {
+      parts.push(`<h2>${escapeHtml(section.heading)}</h2>`);
+    }
+    for (const paragraph of section.paragraphs ?? []) {
+      parts.push(`<p>${sanitizeInlineHtml(paragraph)}</p>`);
+    }
+    const bullets = section.bullets ?? [];
+    if (bullets.length > 0) {
+      parts.push(
+        `<ul>${bullets.map((bullet) => `<li>${sanitizeInlineHtml(bullet)}</li>`).join("")}</ul>`
+      );
+    }
+    if (section.code?.lines?.length) {
+      parts.push(`<pre>${escapeHtml(section.code.lines.join("\n"))}</pre>`);
+    }
+  }
+
+  return parts.join("");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function getAdminQuestions() {
+  return apiFetch<AdminQuestionRowDto[]>("/admin/questions");
+}
+
+export function getAdminQuestion(slug: string) {
+  return apiFetch<AdminQuestionDetailDto>(`/admin/questions/${encodeURIComponent(slug)}`);
+}
+
+export function createQuestion(payload: QuestionUpsertPayload) {
+  return apiFetch<unknown>("/admin/questions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateQuestion(slug: string, payload: QuestionUpsertPayload) {
+  return apiFetch<unknown>(`/admin/questions/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteQuestion(slug: string) {
+  return apiFetch<void>(`/admin/questions/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+  });
+}

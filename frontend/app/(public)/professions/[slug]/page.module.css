@@ -1,0 +1,78 @@
+.specializations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.specialization {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.specializationHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.specializationTitle {
+  margin: 0;
+}
+
+.specializationText {
+  margin: 0;
+  max-width: 720px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.specializationCount {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.topicLink,
+.topicSoon {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.topicLink {
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.topicLink:hover {
+  border-color: var(--accent-soft-border);
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+}
+
+.topicSoon {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.topicCount {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}

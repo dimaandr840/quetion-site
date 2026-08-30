@@ -1,0 +1,132 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-h);
+  padding-inline: 40px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-base);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-6);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.brandGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-8);
+}
+
+.brandName {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.adminTag {
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-4);
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.profileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-base);
+}
+
+.logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--error-main);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: var(--radius-6);
+  padding: 4px 6px;
+  transition: background-color 0.15s ease;
+}
+
+.logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logout:hover {
+  background: var(--error-light);
+}
+
+@media (max-width: 900px) {
+  .header {
+    padding-inline: var(--space-16);
+  }
+
+  .profileName {
+    display: none;
+  }
+}

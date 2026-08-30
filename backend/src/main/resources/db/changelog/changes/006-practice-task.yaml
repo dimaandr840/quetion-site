@@ -1,0 +1,83 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-practice-task
+      author: devprep
+      changes:
+        - createTable:
+            tableName: practice_task
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_practice_task
+              - column:
+                  name: task_key
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hint
+                  type: text
+              - column:
+                  name: question_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_practice_task_question
+                    references: question(id)
+                    deleteCascade: true
+              # @OneToMany + @OrderColumn: Hibernate вставляет строку без position и
+              # только потом проставляет индекс, поэтому колонка остаётся nullable.
+              - column:
+                  name: position
+                  type: int
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: practice_task
+            indexName: idx_practice_task_question
+            columns:
+              - column:
+                  name: question_id
+
+        - createTable:
+            tableName: practice_task_statement
+            columns:
+              - column:
+                  name: task_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_task_statement_task
+                    references: practice_task(id)
+                    deleteCascade: true
+              - column:
+                  name: statement
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: practice_task_statement
+            columnNames: task_id, position
+            constraintName: pk_practice_task_statement

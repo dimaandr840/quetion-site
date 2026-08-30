@@ -1,0 +1,183 @@
+/* ============================================================================
+   Тулбар результатов: сколько нашлось → что включено → в каком порядке.
+   Сортировка живёт здесь, а не в фильтре: это порядок выдачи,
+   а не сужение выборки.
+   ========================================================================== */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-4);
+}
+
+.count {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.countValue {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* ---------- Сегментная сортировка ---------- */
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.sortLabel {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.segments {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.segment {
+  min-height: 32px;
+  padding-inline: var(--space-12);
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition-colors), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .segment:hover[aria-pressed="false"] {
+    color: var(--text-primary);
+  }
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Активные фильтры как снимаемые чипсы ---------- */
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.chipsLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-on-soft);
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition-colors);
+}
+
+@media (hover: hover) {
+  .chip:hover {
+    border-color: var(--accent);
+  }
+}
+
+.chipDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chipDotJunior {
+  background: var(--success-main);
+}
+
+.chipDotMiddle {
+  background: var(--warning-main);
+}
+
+.chipDotSenior {
+  background: var(--error-main);
+}
+
+.chipRemove {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.chip:hover .chipRemove {
+  background: var(--surface);
+}
+
+.clearAll {
+  min-height: 32px;
+  padding-inline: var(--space-8);
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.clearAll:hover {
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .sortLabel {
+    display: none;
+  }
+
+  .segments {
+    width: 100%;
+  }
+
+  .segment {
+    flex: 1;
+    padding-inline: var(--space-8);
+  }
+}

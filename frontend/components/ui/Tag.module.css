@@ -1,0 +1,45 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-4);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-base);
+  color: var(--text-muted);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-base);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pillSmall {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.pillSelected {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-border);
+  color: var(--accent-on-soft);
+  font-weight: 600;
+}

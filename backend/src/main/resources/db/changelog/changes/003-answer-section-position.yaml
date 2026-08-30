@@ -1,0 +1,12 @@
+databaseChangeLog:
+  # Hibernate вставляет строки @OneToMany + @OrderColumn в два шага: сначала INSERT
+  # без position, затем UPDATE с индексом. Поэтому колонка порядка не может быть
+  # NOT NULL на уровне БД — иначе первый INSERT падает с 23502.
+  - changeSet:
+      id: 003-answer-section-position-nullable
+      author: devprep
+      changes:
+        - dropNotNullConstraint:
+            tableName: answer_section
+            columnName: position
+            columnDataType: int

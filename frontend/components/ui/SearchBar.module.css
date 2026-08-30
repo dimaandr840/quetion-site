@@ -1,0 +1,82 @@
+.form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-12);
+  padding: var(--space-16);
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lg);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.shortcut {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius-4);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-base);
+  color: var(--text-muted);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.submit {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-6);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.submit:hover {
+  background: var(--surface-muted);
+  color: var(--accent);
+}
+
+/* compact variant — поля поиска внутри страниц (42px / 300–360px) */
+.compact {
+  padding: var(--space-12);
+  border-radius: var(--radius-8);
+  box-shadow: none;
+  gap: var(--space-8);
+}
+
+.compact .input {
+  font-size: 14px;
+}
+
+/* Кнопка 44×44 не должна растягивать компактное поле. */
+.compact .submit {
+  margin-block: calc(var(--space-12) * -1);
+}

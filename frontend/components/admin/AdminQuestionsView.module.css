@@ -1,0 +1,636 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+/* ---- Заголовок ---- */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-24);
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  padding: var(--space-12) 18px;
+  border: none;
+  border-radius: var(--radius-8);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.addButton:hover {
+  background: var(--accent-hover);
+}
+
+/* ---- Ошибки и массовые действия ---- */
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--error-main);
+  border-radius: var(--radius-8);
+  background: var(--error-light);
+  font-size: 14px;
+  color: var(--error-text);
+}
+
+.retry {
+  padding: 6px 12px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-6);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--radius-8);
+  background: var(--accent-soft);
+}
+
+.bulkCount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-on-soft);
+}
+
+.bulkDelete,
+.bulkAction,
+.bulkReset {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: var(--radius-6);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-colors), transform var(--dur-fast) var(--ease-spring);
+}
+
+.bulkDelete:active:not(:disabled),
+.bulkAction:active:not(:disabled),
+.bulkReset:active {
+  transform: scale(0.96);
+}
+
+/* Массовые действия со статусом публикации. */
+.bulkAction {
+  border: 1px solid var(--border-base);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.bulkAction:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bulkAction:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bulkDelete {
+  border: 1px solid var(--error-main);
+  background: var(--surface);
+  color: var(--error-text);
+}
+
+.bulkDelete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bulkReset {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* ---- Панель фильтров ---- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+/* Выгрузка текущей выборки: вторичное действие, поэтому без заливки. */
+.exportButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-8);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-colors), transform var(--dur-fast) var(--ease-spring);
+}
+
+.exportButton svg {
+  transform: rotate(90deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.exportButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.exportButton:hover:not(:disabled) svg {
+  transform: rotate(90deg) translate3d(2px, 0, 0);
+}
+
+.exportButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Сортировка, скелетоны и тосты ---- */
+
+/* Заголовки колонок — кнопки: клик и Enter/Space работают без лишних атрибутов. */
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+
+.sortButton:hover {
+  color: var(--accent);
+}
+
+.sortIcon,
+.sortIconActive {
+  display: inline-flex;
+  transition: opacity var(--dur-fast) var(--ease-standard),
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.sortIcon {
+  opacity: 0.35;
+}
+
+.sortIconActive {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Строка-заглушка: ширина по колонке, анимация — из глобального .skeleton. */
+.skeletonLine {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-4);
+}
+
+.toastArea {
+  position: fixed;
+  right: var(--space-24);
+  bottom: var(--space-24);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 18px;
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--radius-8);
+  background: var(--surface-raised, var(--surface));
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  animation: dp-toast-in var(--dur-base) var(--ease-spring) both;
+}
+
+.filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-8);
+  cursor: pointer;
+}
+
+.filter:focus-within {
+  border-color: var(--accent);
+}
+
+.filterLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.filterValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.filterSelect {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 240px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-8);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.searchInput:focus {
+  outline: none;
+}
+
+/* ---- Таблица ---- */
+
+.tableCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-12);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 2%);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.headRow {
+  background: var(--surface-muted);
+}
+
+.headRow th {
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--border-base);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.headRow th:first-child {
+  border-top-left-radius: var(--radius-8);
+}
+
+.headRow th:last-child {
+  border-top-right-radius: var(--radius-8);
+}
+
+/* Новые строки проявляются, а не возникают рывком при смене страницы или фильтра. */
+.row {
+  animation: dp-fade-in var(--dur-fast) var(--ease-out) both;
+  transition: background-color var(--dur-fast) var(--ease-standard);
+}
+
+.row:hover {
+  background: var(--surface-muted);
+}
+
+/* Шапка таблицы остаётся видной при вертикальном скролле длинного списка. */
+.headRow th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-muted);
+}
+
+.row td {
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--border-base);
+  vertical-align: middle;
+}
+
+.checkCell {
+  width: 28px;
+  padding-right: 0 !important;
+}
+
+.checkbox {
+  /* Сам флажок 16px, но за счёт padding кликабельная область — 24×24 (AA). */
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 4px;
+  box-sizing: content-box;
+  border-radius: 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.colQuestion {
+  min-width: 260px;
+}
+
+.row .colQuestion {
+  display: table-cell;
+}
+
+.questionTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.questionMeta {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.colCategory {
+  width: 150px;
+}
+
+.metaTag {
+  display: inline-block;
+  padding: 4px var(--space-8);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--radius-4);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-on-soft);
+  white-space: nowrap;
+}
+
+.colLevel {
+  width: 110px;
+}
+
+.colStatus {
+  width: 120px;
+  white-space: nowrap;
+}
+
+.statusDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--space-8);
+  border-radius: var(--radius-pill);
+  vertical-align: middle;
+}
+
+.dotPublished {
+  background: var(--success-main);
+}
+
+.dotDraft {
+  background: var(--slate-400);
+}
+
+.statusPublished {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.statusDraft {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.colDate {
+  width: 110px;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.colActions {
+  width: 80px;
+  text-align: right;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 28×28 было ниже минимума 24×24 вместе с зазорами на таче. */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-6);
+  background: var(--surface-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.iconButton:hover {
+  background: var(--border-base);
+}
+
+.empty {
+  padding: var(--space-32) var(--space-16);
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* ---- Пагинация ---- */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding-top: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.paginationInfo {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.paginationInfo strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageArrow,
+.pageButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-6);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.pageArrow:hover:not(:disabled),
+.pageButton:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+}
+
+.pageArrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pageButtonActive,
+.pageButtonActive:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+}
+
+.pageGap {
+  padding-inline: 2px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 26px;
+  }
+}

@@ -1,0 +1,228 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  /* Стекло через токены: при prefers-reduced-transparency становится плотным. */
+  background: var(--glass-bg);
+  box-shadow: var(--glass-inset);
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  border-bottom: 1px solid transparent;
+  transition: background-color var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+
+/* Состояние «страница прокручена» выставляет Header.tsx. */
+.header[data-scrolled="true"] {
+  border-bottom-color: var(--border-base);
+  box-shadow: var(--shadow-md);
+}
+
+.inner {
+  transition: height var(--dur-base) var(--ease-standard);
+}
+
+.header[data-scrolled="true"] .inner {
+  height: 60px;
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-24);
+  height: var(--header-h);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+
+.logo {
+  transition: transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--indigo-600);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.brandName {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+@media (hover: hover) {
+  .brand:hover .logo {
+    transform: rotate(-8deg) scale(1.08);
+    box-shadow: 0 6px 16px var(--accent-soft-border);
+  }
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-32);
+}
+
+.navLink {
+  position: relative;
+  padding-block: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: var(--transition-colors);
+}
+
+/* Индикатор активного/наведённого пункта выезжает из центра. */
+.navLink::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.navLink:hover {
+  color: var(--accent);
+}
+
+.navLink:hover::after {
+  transform: scaleX(0.7);
+}
+
+.navLinkActive {
+  color: var(--accent);
+}
+
+.navLinkActive::after {
+  transform: scaleX(1);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.iconButton:hover {
+  background: var(--surface-muted, rgba(127, 127, 127, 0.12));
+  color: var(--accent);
+}
+
+.iconButton:active {
+  transform: scale(0.92);
+}
+
+.iconButton svg {
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+
+@media (hover: hover) {
+  .iconButton:hover svg {
+    transform: scale(1.12);
+  }
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-base);
+}
+
+.cta {
+  min-height: 44px;
+  padding-inline: var(--space-16);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.cta:hover {
+  background: var(--accent-hover);
+}
+
+/* Кнопка-гамбургер видна только на узких экранах. */
+.burger {
+  display: none;
+}
+
+.mobilePanel {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .nav {
+    display: none;
+  }
+
+  .burger {
+    display: inline-flex;
+  }
+
+  .mobilePanel {
+    display: flex;
+    animation: dp-fade-down var(--dur-base) var(--ease-out) both;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-16) 0 var(--space-24);
+    border-top: 1px solid var(--border-base);
+    background: var(--header-bg);
+  }
+
+  .mobileLink {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .mobileLinkActive {
+    color: var(--accent);
+  }
+
+  .mobileCta {
+    margin-top: var(--space-12);
+  }
+}
+

@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-totp-anti-replay
+      author: devprep
+      comment: >-
+        Anti-replay для TOTP: номер последнего использованного шага. Код TOTP
+        обязан быть одноразовым, иначе перехваченный код остаётся валидным ещё
+        до 90 секунд.
+      changes:
+        - addColumn:
+            tableName: app_user
+            columns:
+              - column:
+                  name: totp_last_used_step
+                  type: BIGINT
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 008-totp-secret-width
+      author: devprep
+      comment: >-
+        Секрет теперь хранится зашифрованным (AES-GCM, формат v1:base64), это
+        длиннее исходного Base32 — расширяем колонку с запасом на ротацию.
+      changes:
+        - modifyDataType:
+            tableName: app_user
+            columnName: totp_secret
+            newDataType: VARCHAR(256)

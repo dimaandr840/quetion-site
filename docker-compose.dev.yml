@@ -1,0 +1,18 @@
+# Только для локальной разработки: публикует порты БД и поиска на 127.0.0.1,
+# чтобы backend можно было запускать из IDE (mvn spring-boot:run).
+# Использование: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres meilisearch
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  meilisearch:
+    ports:
+      - "127.0.0.1:7700:7700"
+
+  # По http браузер не примет cookie с Secure, а SameSite=Strict мешает
+  # заходить по прямой ссылке. Локально ослабляем оба параметра.
+  api:
+    environment:
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: Lax

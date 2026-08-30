@@ -1,0 +1,36 @@
+.track {
+  position: sticky;
+  /* Сразу под шапкой: та тоже sticky с top: 0. */
+  top: var(--header-h);
+  z-index: 39;
+  height: 3px;
+  margin-bottom: -3px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.bar {
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--indigo-400) 100%);
+  box-shadow: 0 0 12px var(--accent-soft-border);
+}
+
+/* Основной вариант: полосу ведёт сам браузер без JS. */
+@supports (animation-timeline: scroll()) {
+  .bar {
+    animation: dp-scroll-progress linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes dp-scroll-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

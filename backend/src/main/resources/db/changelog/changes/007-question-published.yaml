@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-question-published
+      author: devprep
+      changes:
+        # Переключатель «Опубликовать сразу» в админке до этого никуда не сохранялся.
+        # Существующие вопросы считаем опубликованными, поэтому default = true.
+        - addColumn:
+            tableName: question
+            columns:
+              - column:
+                  name: published
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
