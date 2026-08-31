@@ -113,6 +113,85 @@ PASSWORD_RESET_MAX_ATTEMPTS=5
 PASSWORD_RESET_RESET_TOTP=true
 ```
 
+## Как смотреть логи
+
+### Все сервисы сразу
+
+```bash
+docker compose logs -f
+```
+
+### Конкретный сервис
+
+```bash
+# Backend API
+docker compose logs -f api
+
+# Frontend / Next.js
+docker compose logs -f web
+
+# Nginx
+docker compose logs -f nginx
+
+# PostgreSQL
+docker compose logs -f postgres
+
+# Meilisearch
+docker compose logs -f meilisearch
+```
+
+### Последние строки логов
+
+```bash
+# Последние 100 строк API
+docker compose logs --tail=100 api
+
+# Последние 200 строк всех сервисов
+docker compose logs --tail=200
+```
+
+### Логи за период
+
+```bash
+# Логи API за последний час
+docker compose logs --since=1h api
+
+# Логи API за последние 10 минут и продолжить смотреть новые
+docker compose logs --since=10m -f api
+```
+
+### Если backend запущен без Docker
+
+При запуске через Maven логи выводятся прямо в терминал:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+Если приложение уже запущено в другом терминале, смотрите вывод там. Для сохранения логов в файл можно запустить так:
+
+```bash
+cd backend
+mvn spring-boot:run | tee ../backend.log
+```
+
+### Если frontend запущен без Docker
+
+При запуске через `npm run dev` логи Next.js выводятся прямо в терминал:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Для сохранения логов в файл:
+
+```bash
+cd frontend
+npm run dev | tee ../frontend.log
+```
+
 ## Полезные команды
 
 ```bash
@@ -121,12 +200,6 @@ docker compose down
 
 # Остановить и удалить данные PostgreSQL/Meilisearch
 docker compose down -v
-
-# Посмотреть логи API
-docker compose logs -f api
-
-# Посмотреть логи frontend
-docker compose logs -f web
 
 # Собрать backend
 cd backend && mvn -B package
