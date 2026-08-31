@@ -51,9 +51,8 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
     <!--
-      Отправка письма с кодом восстановления доступа. SMTP настраивается
-      переменными окружения (SMTP_HOST и далее); если хост не задан,
-      сброс пароля просто не рассылает письма и пишет ошибку в лог.
+      Письма с кодом восстановления доступа. JavaMailSender создаётся только при
+      заданном spring.mail.host, поэтому без SMTP сервис всё равно запускается.
     -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

@@ -23,63 +23,55 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Восстановление доступа по почте — замена резервных кодов.
+ * Самостоятельное восстановление доступа по почте — замена резервных кодов.
  *
- * <p>Свойства контура:
+ * <p>Главное свойство: адрес, на который уходит код, нигде не раскрывается. Пользователь сам
+ * вводит адрес; если он совпал с адресом включённой учётки — письмо отправляется, если нет —
+ * не отправляется. Ответ API в обоих случаях одинаковый и содержит только маску того, что
+ * ввел сам пользователь — так форма не становится проверкой существования аккаунтов.
  *
- * <ul>
- *   <li>адрес получателя никогда не отдаётся наружу: в ответе только маска того адреса, который
- *       ввёл сам пользователь ({@code d****@g*****.com}) — она не добавляет знания о том, какой
- *       адрес привязан к учётке;
- *   <li>ответ на запрос кода одинаков и для существующего, и для несуществующего адреса (202 +
- *       та же маска), поэтому перечислить учётки через эту форму нельзя;
- *   <li>в БД лежит только BCrypt-хеш кода; код одноразовый, живёт {@code ttl} и аннулируется
- *       после {@code max-attempts} неверных вводов;
- *   <li>неудачные попытки пишутся в журнал входов, поэтому на форму действует общий лимит по IP;
- *   <li>успешный сброс отзывает все сессии, а при {@code reset-totp=true} ещё и стирает привязку
- *       аутентификатора — это и закрывает сценарий «потерял телефон», ради которого раньше
- *       существовали резервные коды.
- * </ul>
+ * <p>Ограничители злоупотреблений: rate limit по IP (общий с входом), пауза между письмами,
+ * один активный код на учётку, лимит попыток ввода и ограниченный срок жизни кода.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {
 
-    /** Единый текст на все причины отказа: подсказывать, что именно не так, нельзя. */
-    private static final String INVALID_CODE = "Код недействителен или устарел";
+    private static final String INVALID_CODE = "Неверный или истекший код восстановления";
 
-    /** Без похожих друг на друга символов: код диктуют и переписывают руками. */
-    private static final char[] ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
+    /** Без похожих символов (0/O, 1/I): код переносят глазами из письма. */
+    private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-    private static final int GROUPS = 2;
-    private static final int GROUP_LENGTH = 4;
+    private static final int CODE_LENGTH = 8;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AppUserRepository appUserRepository;
-    private final PasswordResetTokenRepository tokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final LoginAttemptRepository loginAttemptRepository;
-    private final PasswordResetMailer mailer;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordResetMailer mailer;
     private final AuthCookieService cookieService;
     private final SecurityProperties securityProperties;
-    private final SecureRandom random = new SecureRandom();
 
     /**
-     * Шаг 1: пользователь вводит адрес, на который должен уйти код. Письмо уходит только если
-     * адрес совпал с адресом учётки, но ответ во всех случаях одинаковый.
+     * Шаг 1: запрос кода.
+     *
+     * <p>Ответ не зависит от того, существует ли учётка: всегда возвращается маска введённого
+     * адреса и срок жизни кода.
      */
     @Transactional
     public AuthResponse.PasswordResetRequestedDto request(String rawEmail, String ip) {
         SecurityProperties.PasswordReset config = securityProperties.getPasswordReset();
         String email = normalizeEmail(rawEmail);
-        AuthResponse.PasswordResetRequestedDto answer =
+        AuthResponse.PasswordResetRequestedDto response =
                 new AuthResponse.PasswordResetRequestedDto(
                         maskEmail(email), Math.max(1, config.getTtl().toMinutes()));
 
         if (!config.isEnabled()) {
-            log.warn("Сброс пароля по почте выключен настройкой — запрос проигнорирован");
-            return answer;
+            log.warn("Запрошен сброс пароля, но он отключён настройками");
+            return response;
         }
 
         Instant now = Instant.now();
@@ -88,25 +80,26 @@ public class PasswordResetService {
         Optional<AppUser> found =
                 appUserRepository.findByEmailIgnoreCase(email).filter(AppUser::isEnabled);
         if (found.isEmpty()) {
-            // Ни в ответе, ни в логе не должно остаться следа, по которому можно
-            // отличить существующий адрес от несуществующего.
-            log.info("Запрос сброса пароля по неизвестному адресу — письмо не отправлено");
-            return answer;
+            // Намеренно молчаливый выход: иначе форма превратится в переборщик адресов.
+            log.info("Запрос восстановления для неизвестного или выключенного адреса");
+            return response;
         }
         AppUser user = found.get();
 
-        Optional<PasswordResetToken> last =
-                tokenRepository.findFirstByUserAndUsedAtIsNullOrderByIdDesc(user);
-        if (last.isPresent()
-                && last.get().getRequestedAt().isAfter(now.minus(config.getCooldown()))) {
-            log.info("Повторный запрос кода в пределах паузы — письмо не отправлено");
-            return answer;
+        Optional<PasswordResetToken> active =
+                passwordResetTokenRepository.findFirstByUserAndUsedAtIsNullOrderByIdDesc(user);
+        if (active.isPresent()
+                && active.get().getRequestedAt() != null
+                && active.get().getRequestedAt().isAfter(now.minus(config.getCooldown()))) {
+            log.info("Повторный запрос кода раньше паузы — письмо не отправлено");
+            return response;
         }
 
-        // Активный код всегда один: старые записи не должны продлевать окно перебора.
-        tokenRepository.deleteAllForUser(user);
+        // Активный код всегда ровно один: старые теряют силу сразу.
+        passwordResetTokenRepository.deleteAllForUser(user);
+
         String code = generateCode();
-        tokenRepository.save(
+        passwordResetTokenRepository.save(
                 PasswordResetToken.builder()
                         .user(user)
                         .codeHash(passwordEncoder.encode(normalizeCode(code)))
@@ -117,10 +110,17 @@ public class PasswordResetService {
                         .build());
 
         mailer.send(user.getEmail(), code, config.getTtl());
-        return answer;
+        return response;
     }
 
-    /** Шаг 2: код из письма + новый пароль. Гасит все сессии, включая текущую. */
+    /**
+     * Шаг 2: подтверждение кода и установка нового пароля.
+     *
+     * <p>Любая неудача возвращает одно и то же сообщение: по тексту ошибки нельзя понять, есть
+     * ли такой адрес и был ли по нему заказан код.
+     *
+     * @return cookie, гасящие все сессии в текущем браузере
+     */
     @Transactional
     public List<String> confirm(AuthRequests.PasswordResetConfirm request, String ip) {
         SecurityProperties.PasswordReset config = securityProperties.getPasswordReset();
@@ -136,78 +136,98 @@ public class PasswordResetService {
                 appUserRepository
                         .findByEmailIgnoreCase(email)
                         .filter(AppUser::isEnabled)
-                        .orElse(null);
+                        .orElseGet(() -> null);
         if (user == null) {
             recordFailure(email, ip, now);
             throw new BadCredentialsException(INVALID_CODE);
         }
 
         PasswordResetToken token =
-                tokenRepository.findFirstByUserAndUsedAtIsNullOrderByIdDesc(user).orElse(null);
+                passwordResetTokenRepository
+                        .findFirstByUserAndUsedAtIsNullOrderByIdDesc(user)
+                        .orElse(null);
         if (token == null || !token.isUsable(now)) {
             recordFailure(email, ip, now);
             throw new BadCredentialsException(INVALID_CODE);
         }
         if (token.getAttempts() >= config.getMaxAttempts()) {
-            tokenRepository.delete(token);
-            log.warn("Код восстановления аннулирован: исчерпан лимит попыток");
+            // Код аннулируется целиком: иначе 8 символов можно добивать бесконечно.
+            passwordResetTokenRepository.deleteAllForUser(user);
             recordFailure(email, ip, now);
+            log.warn("Исчерпан лимит попыток ввода кода восстановления — код аннулирован");
             throw new BadCredentialsException(INVALID_CODE);
         }
         if (!passwordEncoder.matches(normalizeCode(request.code()), token.getCodeHash())) {
             token.setAttempts(token.getAttempts() + 1);
-            tokenRepository.save(token);
+            passwordResetTokenRepository.save(token);
             recordFailure(email, ip, now);
             throw new BadCredentialsException(INVALID_CODE);
         }
 
         token.setUsedAt(now);
-        tokenRepository.save(token);
+        passwordResetTokenRepository.save(token);
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         user.setPasswordChangedAt(now);
         user.setFailedLoginAttempts(0);
         user.setLockoutUntil(null);
         if (config.isResetTotp()) {
-            // Сценарий «потерял телефон»: привязка стирается, на следующем входе
-            // выдаётся новый секрет и 2FA настраивается заново.
+            // Сценарий «потерял телефон»: без этого человек сменит пароль, но всё равно
+            // не войдёт. Новый секрет выдаётся при следующем входе.
             user.setTotpSecret(null);
             user.setTotpEnabled(false);
             user.setTotpLastUsedStep(null);
         }
         appUserRepository.save(user);
 
-        tokenRepository.deleteAllForUser(user);
-        int revoked = refreshTokenRepository.revokeAllForUser(user, now);
-        log.warn(
-                "Пароль восстановлен по коду из письма, отозвано сессий: {}, 2FA сброшена: {}",
-                revoked,
-                config.isResetTotp());
+        passwordResetTokenRepository.deleteAllForUser(user);
+        refreshTokenRepository.revokeAllForUser(user, now);
+        log.warn("Пароль сброшен по коду из письма, все сессии отозваны");
+
         return List.of(cookieService.clearAll());
     }
 
-    /**
-     * Маска адреса: первый символ имени и домена, остальное звёздочками, домен верхнего уровня
-     * остаётся видимым. Полный адрес не показывается никогда.
-     */
-    public static String maskEmail(String email) {
-        if (email == null || email.isBlank()) {
-            return "";
+    private static String generateCode() {
+        StringBuilder builder = new StringBuilder(CODE_LENGTH + 1);
+        for (int i = 0; i < CODE_LENGTH; i++) {
+            if (i == CODE_LENGTH / 2) {
+                builder.append('-');
+            }
+            builder.append(ALPHABET.charAt(RANDOM.nextInt(ALPHABET.length())));
         }
-        int at = email.lastIndexOf('@');
+        return builder.toString();
+    }
+
+    private static String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    /** Код сравнивается без регистра, дефисов и пробелов: его копируют руками. */
+    private static String normalizeCode(String code) {
+        return code == null ? "" : code.toUpperCase().replaceAll("[^A-Z0-9]", "");
+    }
+
+    /**
+     * Маска вида {@code d****@g****.com}: подсказка достаточна, чтобы узнать свой адрес, но
+     * недостаточна, чтобы его узнать со стороны.
+     */
+    private static String maskEmail(String email) {
+        int at = email.indexOf('@');
         if (at <= 0 || at == email.length() - 1) {
             return maskPart(email);
         }
         String local = email.substring(0, at);
         String domain = email.substring(at + 1);
         int dot = domain.lastIndexOf('.');
-        String host = dot > 0 ? domain.substring(0, dot) : domain;
-        String tld = dot > 0 ? domain.substring(dot) : "";
-        return maskPart(local) + "@" + maskPart(host) + tld;
+        String masked =
+                dot <= 0
+                        ? maskPart(domain)
+                        : maskPart(domain.substring(0, dot)) + domain.substring(dot);
+        return maskPart(local) + "@" + masked;
     }
 
     private static String maskPart(String value) {
-        if (value.isEmpty()) {
+        if (value == null || value.isEmpty()) {
             return "";
         }
         if (value.length() == 1) {
@@ -216,27 +236,18 @@ public class PasswordResetService {
         return value.charAt(0) + "*".repeat(value.length() - 1);
     }
 
-    /** Приводит код к виду без разделителей и регистра: люди вводят по-разному. */
-    public static String normalizeCode(String code) {
-        return code == null ? "" : code.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
-    }
-
-    private static String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
-    }
-
-    /** ~40 бит энтропии, вид {@code ABCD-2345}. */
-    private String generateCode() {
-        StringBuilder code = new StringBuilder(GROUPS * GROUP_LENGTH + GROUPS - 1);
-        for (int group = 0; group < GROUPS; group++) {
-            if (group > 0) {
-                code.append('-');
-            }
-            for (int i = 0; i < GROUP_LENGTH; i++) {
-                code.append(ALPHABET[random.nextInt(ALPHABET.length)]);
-            }
-        }
-        return code.toString();
+    /**
+     * Неудачные попытки пишутся в тот же журнал, что и попытки входа — иначе перебор кодов
+     * обходил бы IP-лимит.
+     */
+    private void recordFailure(String email, String ip, Instant now) {
+        loginAttemptRepository.save(
+                LoginAttempt.builder()
+                        .email(truncate(email, 256))
+                        .ipAddress(truncate(ip == null || ip.isBlank() ? "unknown" : ip, 64))
+                        .successful(false)
+                        .attemptedAt(now)
+                        .build());
     }
 
     private void enforceIpRateLimit(String ip, Instant now) {
@@ -247,20 +258,9 @@ public class PasswordResetService {
         Instant since = now.minus(config.getWindow());
         if (loginAttemptRepository.countFailuresByIpSince(ip, since)
                 >= config.getMaxFailuresPerIp()) {
-            log.warn("Превышен лимит попыток с IP {} — сброс пароля отклонён", ip);
+            log.warn("Превышен лимит попыток с IP {} — восстановление отклонено", ip);
             throw new TooManyAttemptsException(config.getWindow());
         }
-    }
-
-    /** Неудачи идут в общий журнал входов: перебор кода упирается в лимит по IP. */
-    private void recordFailure(String email, String ip, Instant now) {
-        loginAttemptRepository.save(
-                LoginAttempt.builder()
-                        .email(truncate(email, 256))
-                        .ipAddress(truncate(ip == null || ip.isBlank() ? "unknown" : ip, 64))
-                        .successful(false)
-                        .attemptedAt(now)
-                        .build());
     }
 
     private static String truncate(String value, int max) {

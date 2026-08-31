@@ -17,11 +17,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Одноразовый код восстановления доступа, отправленный на почту пользователя.
+ * Одноразовый код восстановления доступа, отправленный письмом.
  *
- * <p>В БД лежит только BCrypt-хеш кода: по дампу базы код не восстановить. Сам адрес здесь тоже не
- * дублируется — он берётся из связанного {@link AppUser}, поэтому лишней копии персональных данных
- * не появляется.
+ * <p>Сам код не хранится: в БД лежит только BCrypt-хеш, как и у пароля — дамп базы не
+ * позволяет восстановить чей-либо доступ. Счётчик {@code attempts} гасит перебор по одному
+ * высланному коду, {@code expiresAt} ограничивает окно его жизни.
  */
 @Entity
 @Table(name = "password_reset_token")
@@ -46,21 +46,21 @@ public class PasswordResetToken extends Auditable {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    /** Заполняется при успешном использовании: код строго одноразовый. */
+    /** Проставляется при успешном сбросе: повторно такой код не сработает. */
     @Column(name = "used_at")
     private Instant usedAt;
 
-    /** Число неверных вводов. Перебор упирается в лимит и код аннулируется. */
     @Column(name = "attempts", nullable = false)
     private int attempts;
 
     @Column(name = "requested_at", nullable = false)
     private Instant requestedAt;
 
-    /** IP, с которого запросили код — нужен для разбора инцидентов. */
+    /** IP запроса — только для разбора инцидентов. */
     @Column(name = "requested_ip", length = 64)
     private String requestedIp;
 
+    /** Код ещё не использован и не просрочен. */
     public boolean isUsable(Instant now) {
         return usedAt == null && expiresAt != null && expiresAt.isAfter(now);
     }

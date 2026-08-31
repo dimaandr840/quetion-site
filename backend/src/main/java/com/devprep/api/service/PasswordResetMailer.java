@@ -10,12 +10,13 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
 /**
- * Письмо с кодом восстановления доступа.
+ * Отправка письма с кодом восстановления доступа.
  *
- * <p>Ни код, ни адрес получателя не попадают в лог: логи читает больше людей, чем почтовый ящик
- * владельца учётки. {@link JavaMailSender} берётся через {@link ObjectProvider} — если SMTP не
- * настроен (пустой {@code SMTP_HOST}), сервис остаётся работоспособным, а попытка отправки
- * честно пишет ошибку.
+ * <p>Ни адрес получателя, ни сам код никогда не попадают в логи: журналы часто доступны шире,
+ * чем база, и утечка кода в лог равносильна утечке доступа.
+ *
+ * <p>{@link ObjectProvider} нужен потому, что {@link JavaMailSender} создаётся только при
+ * заданном {@code spring.mail.host}: без SMTP сервис должен стартовать как обычно.
  */
 @Slf4j
 @Component
@@ -25,49 +26,39 @@ public class PasswordResetMailer {
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final SecurityProperties securityProperties;
 
-    /** @return true, если письмо удалось передать SMTP-серверу. */
+    /** @return true, если письмо отдано SMTP-серверу. */
     public boolean send(String email, String code, Duration ttl) {
         SecurityProperties.PasswordReset config = securityProperties.getPasswordReset();
         JavaMailSender sender = mailSenderProvider.getIfAvailable();
-        if (sender == null) {
-            log.error("SMTP не настроен: код восстановления доступа отправить некуда");
+        if (sender == null || config.getMailFrom() == null || config.getMailFrom().isBlank()) {
+            log.error(
+                    "SMTP не настроен (SMTP_HOST / PASSWORD_RESET_MAIL_FROM) — письмо с кодом"
+                            + " восстановления не отправлено");
             return false;
         }
-        String from = config.getMailFrom();
-        if (from == null || from.isBlank()) {
-            log.error("Не задан PASSWORD_RESET_MAIL_FROM: письмо со сбросом пароля не отправлено");
-            return false;
-        }
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(from);
-        message.setTo(email);
-        message.setSubject(config.getMailSubject());
-        message.setText(body(code, ttl));
         try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(config.getMailFrom());
+            message.setTo(email);
+            message.setSubject(config.getMailSubject());
+            message.setText(
+                    "Здравствуйте!\n\n"
+                            + "Код для восстановления доступа к DevPrep: "
+                            + code
+                            + "\n\n"
+                            + "Код действует "
+                            + Math.max(1, ttl.toMinutes())
+                            + " мин. и срабатывает один раз.\n"
+                            + "Если вы не запрашивали восстановление — просто проигнорируйте"
+                            + " это письмо: текущий пароль остался без изменений.\n");
             sender.send(message);
-            log.info("Код восстановления доступа отправлен письмом");
             return true;
         } catch (RuntimeException e) {
-            // Текст исключения может содержать адрес получателя, поэтому наружу только тип.
-            log.error("Не удалось отправить письмо со сбросом пароля: {}", e.getClass().getName());
+            // Сообщение ошибки SMTP может содержать адрес, поэтому логируем только класс.
+            log.error(
+                    "Не удалось отправить письмо с кодом восстановления: {}",
+                    e.getClass().getSimpleName());
             return false;
         }
-    }
-
-    private String body(String code, Duration ttl) {
-        long minutes = Math.max(1, ttl.toMinutes());
-        return """
-                Кто-то запросил восстановление доступа к DevPrep для этого адреса.
-
-                Код подтверждения: %s
-
-                Код действует %d мин. и работает только один раз.
-                Введите его на странице восстановления доступа вместе с новым паролем.
-
-                Если вы этого не запрашивали — просто удалите письмо: без кода
-                пароль изменить нельзя, а активные сессии останутся как были.
-                """
-                .formatted(code, minutes);
     }
 }
