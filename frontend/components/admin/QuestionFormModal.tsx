@@ -6,15 +6,15 @@ import { ApiError } from "@/lib/api";
 import {
   buildQuestionPayload,
   createQuestion,
+  imageToHtml,
   sectionsToHtml,
   updateQuestion,
   type AdminQuestionDetailDto,
-  type QuestionImagePayload,
 } from "@/lib/admin-api";
 import { normalizeLinkHref } from "@/lib/inline-html";
+import { uploadQuestionImage } from "@/lib/media-api";
 import { LEVELS } from "@/lib/queries";
-import type { Level } from "@/lib/types";
-import QuestionImagesField from "./QuestionImagesField";
+import type { BlockAlign, Level } from "@/lib/types";
 import styles from "./QuestionFormModal.module.css";
 
 export interface QuestionFormOption {
@@ -44,7 +44,14 @@ type ToolbarCommand =
   | "formatBlock:blockquote";
 
 /** Действия, которых нет в document.execCommand — обрабатываются вручную. */
-type ToolbarAction = "inline-code" | "highlight" | "link";
+type ToolbarAction =
+  | "inline-code"
+  | "highlight"
+  | "link"
+  | "image"
+  | "align-left"
+  | "align-center"
+  | "align-right";
 
 interface ToolbarButton {
   key: string;
@@ -63,9 +70,10 @@ interface ToolbarButton {
 /**
  * Панель форматирования. Каждая кнопка обязана что-то делать: набор ограничен
  * тем, что умеет сохранить parseAnswerHtml и показать публичная страница вопроса.
- * Картинок и таблиц здесь нет: таблицы некуда сохранить, а картинки живут не в
- * разметке ответа, а отдельным списком внизу формы — так у них есть alt,
- * подпись и порядок, а бэкенд может чистить файлы при отвязке.
+ * Таблиц здесь нет: их некуда сохранить в модели ответа.
+ *
+ * Выравнивание и картинка подписаны буквами, а не иконками: в наборе Icon нет
+ * подходящих глифов, а выдумывать имя иконки нельзя — тип IconName закрытый.
  */
 const TOOLBAR_GROUPS: ToolbarButton[][] = [
   [
@@ -79,6 +87,36 @@ const TOOLBAR_GROUPS: ToolbarButton[][] = [
     { key: "h2", label: "H2", title: "Заголовок 2", command: "formatBlock:h2", small: true },
     { key: "ul", icon: "list", title: "Список", command: "insertUnorderedList" },
     { key: "ol", icon: "list-ordered", title: "Нумерованный список", command: "insertOrderedList" },
+  ],
+  [
+    {
+      key: "align-left",
+      label: "≡L",
+      title: "По левому краю",
+      action: "align-left",
+      small: true,
+    },
+    {
+      key: "align-center",
+      label: "≡C",
+      title: "По центру",
+      action: "align-center",
+      small: true,
+    },
+    {
+      key: "align-right",
+      label: "≡R",
+      title: "По правому краю",
+      action: "align-right",
+      small: true,
+    },
+    {
+      key: "image",
+      label: "IMG",
+      title: "Вставить картинку в место курсора",
+      action: "image",
+      small: true,
+    },
   ],
   [
     {
@@ -121,6 +159,12 @@ function unwrap(element: HTMLElement) {
   parent.removeChild(element);
 }
 
+const CSS_ALIGN: Record<BlockAlign, string> = {
+  LEFT: "left",
+  CENTER: "center",
+  RIGHT: "right",
+};
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
@@ -133,8 +177,16 @@ export function QuestionFormModal({
 }: QuestionFormModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const overlayMouseDown = useRef(false);
   const isEdit = Boolean(initial);
+
+  // Диалог выбора файла забирает фокус и сбрасывает выделение, поэтому место
+  // курсора запоминается до открытия диалога.
+  const savedRangeRef = useRef<Range | null>(null);
+  // Картинка нередактируема, поэтому обычное выделение внутрь неё не попадает:
+  // запоминаем последнюю, по которой кликнули, чтобы кнопки выравнивания работали.
+  const selectedFigureRef = useRef<HTMLElement | null>(null);
 
   const [title, setTitle] = useState(initial?.title ?? "");
   const [professionSlug, setProfessionSlug] = useState(
@@ -142,9 +194,9 @@ export function QuestionFormModal({
   );
   const [level, setLevel] = useState<Level>(initial?.level ?? "Middle");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
-  const [images, setImages] = useState<QuestionImagePayload[]>(initial?.images ?? []);
   const [publish, setPublish] = useState(initial ? initial.published !== false : true);
   const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const visibleCategories = useMemo(
@@ -156,18 +208,8 @@ export function QuestionFormModal({
   );
 
   // HTML исходного ответа считаем один раз: он же служит эталоном для проверки изменений.
+  // Картинки теперь часть разметки, поэтому отдельный слепок для них не нужен.
   const initialHtmlRef = useRef(initial ? sectionsToHtml(initial.sections ?? []) : "");
-  // Слепок картинок для той же проверки: сравниваем ключи и подписи, а не
-  // ссылки на объекты — иначе любой рендер считался бы правкой.
-  const initialImagesRef = useRef(
-    JSON.stringify(
-      (initial?.images ?? []).map((image) => [
-        image.storageKey,
-        image.alt,
-        image.caption ?? "",
-      ])
-    )
-  );
 
   // При смене направления ранее выбранная категория может стать
   // недоступной — подставляем первую доступную во время рендера,
@@ -185,9 +227,6 @@ export function QuestionFormModal({
    */
   function requestClose() {
     const editorText = (editorRef.current?.textContent ?? "").trim();
-    const imagesSnapshot = JSON.stringify(
-      images.map((image) => [image.storageKey, image.alt, image.caption ?? ""])
-    );
     const dirty = initial
       ? title.trim() !== (initial.title ?? "").trim() ||
         tags.trim() !== (initial.tags ?? []).join(", ").trim() ||
@@ -195,12 +234,12 @@ export function QuestionFormModal({
         level !== initial.level ||
         professionSlug !== initial.professionSlug ||
         effectiveCategorySlug !== initial.categorySlug ||
-        imagesSnapshot !== initialImagesRef.current ||
         publish !== (initial.published !== false)
       : title.trim().length > 0 ||
         tags.trim().length > 0 ||
-        images.length > 0 ||
-        editorText.length > 0;
+        editorText.length > 0 ||
+        // Картинка без текста тоже считается заполненной формой: файл уже загружен.
+        Boolean(editorRef.current?.querySelector("figure[data-image]"));
 
     if (dirty && !window.confirm("Закрыть окно? Изменения не сохранятся.")) return;
     onClose();
@@ -277,6 +316,99 @@ export function QuestionFormModal({
       return;
     }
     document.execCommand(command);
+  }
+
+  /**
+   * Выравнивание блока. Для текста работает штатный execCommand, а картинке
+   * стиль ставим напрямую: она contenteditable=false, и выделение внутрь неё не заходит.
+   */
+  function applyAlign(align: BlockAlign) {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const figure = selectedFigureRef.current;
+    if (figure && editor.contains(figure)) {
+      figure.style.textAlign = CSS_ALIGN[align];
+      return;
+    }
+
+    editor.focus();
+    if (align === "CENTER") document.execCommand("justifyCenter");
+    else if (align === "RIGHT") document.execCommand("justifyRight");
+    else document.execCommand("justifyLeft");
+  }
+
+  /** Запоминаем место курсора: диалог выбора файла сбросит выделение. */
+  function pickImage() {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    savedRangeRef.current =
+      range && editor?.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
+    fileInputRef.current?.click();
+  }
+
+  /**
+   * Загрузка и вставка картинки в место курсора.
+   *
+   * alt спрашиваем до загрузки: он обязателен на бэкенде, и бессмысленно занимать
+   * место в хранилище файлом, который всё равно не сохранится.
+   */
+  async function onImagePicked(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Сбрасываем сразу: иначе повторный выбор того же файла не даст события.
+    event.target.value = "";
+    if (!file) return;
+
+    const alt = window.prompt(
+      "Опишите картинку словами (обязательно): этот текст видят поиск и скринридеры",
+      ""
+    );
+    if (alt === null) return;
+    if (!alt.trim()) {
+      setError("У картинки обязателен альтернативный текст.");
+      return;
+    }
+
+    const caption = window.prompt("Подпись под картинкой (можно оставить пустой)", "") ?? "";
+
+    setError(null);
+    setUploading(true);
+    try {
+      const uploaded = await uploadQuestionImage(file);
+      const markup = imageToHtml({
+        kind: "IMAGE",
+        align: "LEFT",
+        storageKey: uploaded.storageKey,
+        url: uploaded.url,
+        alt: alt.trim(),
+        caption: caption.trim() || undefined,
+        width: uploaded.width,
+        height: uploaded.height,
+      });
+
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+
+      const selection = window.getSelection();
+      if (selection && savedRangeRef.current) {
+        selection.removeAllRanges();
+        selection.addRange(savedRangeRef.current);
+      }
+
+      // Пустой абзац после картинки — единственный способ продолжить набор текста:
+      // сама <figure> нередактируема, и курсору было бы негде встать.
+      document.execCommand("insertHTML", false, `${markup}<p><br /></p>`);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.detail ?? caught.message
+          : "Не удалось загрузить картинку. Допустимы JPG и PNG до 5 МБ."
+      );
+    } finally {
+      setUploading(false);
+    }
   }
 
   /**
@@ -428,6 +560,22 @@ export function QuestionFormModal({
       toggleInlineTag("mark");
       return;
     }
+    if (button.action === "image") {
+      pickImage();
+      return;
+    }
+    if (button.action === "align-left") {
+      applyAlign("LEFT");
+      return;
+    }
+    if (button.action === "align-center") {
+      applyAlign("CENTER");
+      return;
+    }
+    if (button.action === "align-right") {
+      applyAlign("RIGHT");
+      return;
+    }
     runCommand(button.command);
   }
 
@@ -435,18 +583,13 @@ export function QuestionFormModal({
     event.preventDefault();
 
     const answerHtml = editorRef.current?.innerHTML ?? "";
-    if (!(editorRef.current?.textContent ?? "").trim()) {
+    const hasImage = Boolean(editorRef.current?.querySelector("figure[data-image]"));
+    if (!(editorRef.current?.textContent ?? "").trim() && !hasImage) {
       setError("Заполните текст ответа.");
       return;
     }
     if (!professionSlug || !effectiveCategorySlug) {
       setError("Выберите направление и категорию.");
-      return;
-    }
-    // alt обязателен и на бэкенде (@NotBlank). Проверяем здесь, чтобы админ
-    // видел понятный текст вместо общей ошибки валидации 400.
-    if (images.some((image) => !image.alt.trim())) {
-      setError("У каждой картинки заполните альтернативный текст.");
       return;
     }
 
@@ -461,7 +604,6 @@ export function QuestionFormModal({
         tags,
         answerHtml,
         published: publish,
-        images,
         slug: initial?.slug,
       });
 
@@ -622,6 +764,7 @@ export function QuestionFormModal({
                           className={styles.toolbarButton}
                           title={button.title}
                           aria-label={button.title}
+                          disabled={button.action === "image" && uploading}
                           onClick={() => onToolbarClick(button)}
                         >
                           {button.icon ? (
@@ -656,9 +799,31 @@ export function QuestionFormModal({
                   aria-multiline="true"
                   aria-labelledby="admin-question-answer-label"
                   onKeyDown={onEditorKeyDown}
+                  // Клик по картинке делает её целью кнопок выравнивания.
+                  onClick={(event) => {
+                    const target = event.target as HTMLElement;
+                    const figure = target.closest?.(
+                      "figure[data-image]"
+                    ) as HTMLElement | null;
+                    selectedFigureRef.current =
+                      figure && editorRef.current?.contains(figure) ? figure : null;
+                  }}
                   data-placeholder="Опишите ответ: теория, примеры кода, подводные камни..."
                 />
               </div>
+              <p className={styles.hint}>
+                Картинка вставляется кнопкой IMG туда, где стоит курсор, и всегда занимает
+                отдельную строку. Чтобы выровнять её — кликните по картинке и нажмите
+                ≡L, ≡C или ≡R. Для текста те же кнопки работают по месту курсора.
+                {uploading && " Загружаем картинку..."}
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                hidden
+                onChange={onImagePicked}
+              />
             </div>
 
             <div className={styles.group}>
@@ -671,15 +836,6 @@ export function QuestionFormModal({
                 value={tags}
                 onChange={(event) => setTags(event.target.value)}
                 placeholder="Например: HashMap, Garbage Collector, Memory..."
-              />
-            </div>
-
-            <div className={styles.group}>
-              <span className={styles.label}>Картинки к вопросу</span>
-              <QuestionImagesField
-                images={images}
-                onChange={setImages}
-                disabled={pending}
               />
             </div>
 
@@ -717,7 +873,7 @@ export function QuestionFormModal({
             >
               Отмена
             </button>
-            <button type="submit" className={styles.save} disabled={pending}>
+            <button type="submit" className={styles.save} disabled={pending || uploading}>
               {pending ? "Сохраняем..." : isEdit ? "Сохранить изменения" : "Сохранить вопрос"}
             </button>
           </div>
