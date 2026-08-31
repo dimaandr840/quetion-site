@@ -31,6 +31,9 @@ export interface ResultsToolbarProps {
  * сколько нашлось, почему именно столько и как это быстро отменить.
  * Чипсы всегда рядом с результатом, а не внутри боковой панели,
  * потому что на мобильном панель закрыта.
+ *
+ * Крестика на чипсе нет: сам чипс — кнопка, клик по нему снимает фильтр.
+ * Иконка внутри пилюли на 13px мельче зоны нажатия и читалась как мусор.
  */
 export function ResultsToolbar({
   action,
@@ -74,57 +77,53 @@ export function ResultsToolbar({
       {hasActive && (
         <div className={styles.chips}>
           {levels.map((level) => (
-            <span key={level} className={styles.chip}>
+            <button
+              key={level}
+              type="button"
+              className={styles.chip}
+              title={`Убрать фильтр ${level}`}
+              aria-label={`Убрать фильтр ${level}`}
+              onClick={() =>
+                commit({ levels: levels.filter((item) => item !== level) })
+              }
+            >
               <span
                 className={`${styles.chipDot} ${LEVEL_DOT[level]}`}
                 aria-hidden="true"
               />
               {level}
-              <button
-                type="button"
-                className={styles.chipRemove}
-                aria-label={`Убрать фильтр ${level}`}
-                onClick={() =>
-                  commit({ levels: levels.filter((item) => item !== level) })
-                }
-              >
-                ✕
-              </button>
-            </span>
+            </button>
           ))}
 
           {selectedProfessions.map((slug) => (
-            <span key={slug} className={styles.chip}>
+            <button
+              key={slug}
+              type="button"
+              className={styles.chip}
+              title={`Убрать фильтр ${professionTitles[slug] ?? slug}`}
+              aria-label={`Убрать фильтр ${professionTitles[slug] ?? slug}`}
+              onClick={() =>
+                commit({
+                  professions: selectedProfessions.filter(
+                    (item) => item !== slug
+                  ),
+                })
+              }
+            >
               {professionTitles[slug] ?? slug}
-              <button
-                type="button"
-                className={styles.chipRemove}
-                aria-label={`Убрать фильтр ${professionTitles[slug] ?? slug}`}
-                onClick={() =>
-                  commit({
-                    professions: selectedProfessions.filter(
-                      (item) => item !== slug
-                    ),
-                  })
-                }
-              >
-                ✕
-              </button>
-            </span>
+            </button>
           ))}
 
           {onlyPopular && (
-            <span className={styles.chip}>
+            <button
+              type="button"
+              className={styles.chip}
+              title="Убрать фильтр по популярности"
+              aria-label="Убрать фильтр по популярности"
+              onClick={() => commit({ onlyPopular: false })}
+            >
               Частые на собеседованиях
-              <button
-                type="button"
-                className={styles.chipRemove}
-                aria-label="Убрать фильтр по популярности"
-                onClick={() => commit({ onlyPopular: false })}
-              >
-                ✕
-              </button>
-            </span>
+            </button>
           )}
 
           <button

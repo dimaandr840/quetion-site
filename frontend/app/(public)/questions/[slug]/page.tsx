@@ -7,6 +7,7 @@ import {
   fetchQuestion,
   fetchQuestions,
 } from "@/lib/content-api";
+import { stripInlineHtml } from "@/lib/inline-html";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { LevelBadge } from "@/components/ui/Badge";
 import { CardGrid, CompactQuestionCard } from "@/components/ui/Cards";
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   return buildMetadata({
     title: question.title,
-    description: question.tldr,
+    // В описании не должно быть разметки: в базе она может остаться от редактора.
+    description: stripInlineHtml(question.tldr),
     path: `/questions/${slug}`,
     type: "article",
   });
@@ -112,11 +114,8 @@ export default async function QuestionPage({ params }: PageProps) {
 
       <div className={styles.layout}>
         <article className={styles.article}>
-          <div className={styles.tldr}>
-            <span className={styles.tldrLabel}>TL;DR</span>
-            <p className={styles.tldrText}>{question.tldr}</p>
-          </div>
-
+          {/* Блок «TL;DR» убран: аббревиатура непонятна, а сам текст дублировал
+              первый абзац ответа. Краткая суть остаётся в описании страницы. */}
           <QuestionActions slug={question.slug} title={question.title} />
 
           {question.sections.map((section) => (

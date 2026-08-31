@@ -36,8 +36,8 @@ export default async function CategoriesPage() {
         b.count - a.count || a.category.title.localeCompare(b.category.title, "ru")
     );
 
+  // Темы без вопросов не показываем совсем: список «в работе» ничего не даёт читателю.
   const ready = withCounts.filter((entry) => entry.count > 0);
-  const planned = withCounts.filter((entry) => entry.count === 0);
 
   return (
     <div className={`shell ${styles.wrap}`}>
@@ -46,9 +46,9 @@ export default async function CategoriesPage() {
       <div className={styles.head}>
         <h1 className={`h1 ${styles.title}`}>Темы</h1>
         <p className={`body-large ${styles.intro}`}>
-          Тема — самый нижний уровень каталога: сфера → профессия →
-          специализация → тема. {pluralizeTopics(ready.length)} уже с разобранными
-          вопросами{planned.length > 0 ? `, ещё ${planned.length} в работе` : ""}.
+          Тема — это конкретный раздел внутри профессии, например Core Java или
+          Тест-дизайн. Здесь {pluralizeTopics(ready.length)} с разобранными
+          вопросами.
         </p>
       </div>
 
@@ -76,16 +76,6 @@ export default async function CategoriesPage() {
           );
         })}
       </CardGrid>
-
-      {planned.length > 0 && (
-        <section className={styles.head}>
-          <h2 className="h3">Готовим материалы</h2>
-          <p className={`body-base ${styles.intro}`}>
-            Эти темы пока без разобранных вопросов:{" "}
-            {planned.map((entry) => entry.category.title).join(", ")}.
-          </p>
-        </section>
-      )}
     </div>
   );
 }

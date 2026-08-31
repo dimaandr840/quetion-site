@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { HERO, NAV_LINKS } from "@/lib/content";
+import { HERO } from "@/lib/content";
+import { navLinks } from "@/lib/nav";
 import { Icon } from "../ui/Icon";
 import { SearchOverlay } from "./SearchOverlay";
 import { ThemeToggle } from "./ThemeToggle";
@@ -84,7 +85,7 @@ export function Header({
         </Link>
 
         <nav className={styles.nav} aria-label="Основная навигация">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = isActive(link.href);
             return (
               <Link
@@ -131,7 +132,7 @@ export function Header({
           className={`shell ${styles.mobilePanel}`}
           aria-label="Мобильная навигация"
         >
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = isActive(link.href);
             return (
               <Link

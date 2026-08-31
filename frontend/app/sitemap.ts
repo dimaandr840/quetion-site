@@ -35,13 +35,7 @@ function lastModified(entity: unknown): { lastModified?: Date } {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticPaths = [
-    "/",
-    "/professions",
-    "/questions",
-    "/categories",
-    "/about",
-  ];
+  const staticPaths = ["/", "/professions", "/questions", "/categories"];
 
   const [professions, categories, questions] = await Promise.all([
     fetchProfessions(),

@@ -1,5 +1,5 @@
 /* ============================================================================
-   Тулбар результатов: сколько нашлось → что включено → в каком порядке.
+   Тулбар результатов: сколько нашлось, что включено, в каком порядке.
    Сортировка живёт здесь, а не в фильтре: это порядок выдачи,
    а не сужение выборки.
    ========================================================================== */
@@ -94,18 +94,22 @@
   color: var(--text-muted);
 }
 
+/* Весь чипс — кнопка снятия фильтра, поэтому отдельного крестика внутри нет. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 32px;
-  padding: 0 6px 0 12px;
+  padding: 0 12px;
   border: 1px solid var(--accent-soft-border);
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
   color: var(--accent-on-soft);
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
   transition: var(--transition-colors);
 }
 
@@ -134,22 +138,6 @@
   background: var(--error-main);
 }
 
-.chipRemove {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.chip:hover .chipRemove {
-  background: var(--surface);
-}
-
 .clearAll {
   min-height: 32px;
   padding-inline: var(--space-8);
@@ -161,6 +149,7 @@
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .clearAll:hover {

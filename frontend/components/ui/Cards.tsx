@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Category, Profession, QuestionSummary } from "@/lib/types";
 import { pluralizeQuestions } from "@/lib/plural";
+import { stripInlineHtml } from "@/lib/inline-html";
 import { LevelBadge } from "./Badge";
 import { Icon } from "./Icon";
 import { Tag } from "./Tag";
@@ -102,7 +103,9 @@ export function QuestionCard({
           {question.title}
         </Link>
       </h3>
-      <p className={styles.snippet}>{question.snippet}</p>
+      {/* Превью — всегда чистый текст: в базе в этом поле может остаться
+          инлайн-разметка от редактора админки. */}
+      <p className={styles.snippet}>{stripInlineHtml(question.snippet)}</p>
       <div className={styles.tags}>
         {question.tags.slice(0, 2).map((tag) => (
           <Tag key={tag}>{tag}</Tag>
