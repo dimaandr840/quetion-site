@@ -99,7 +99,12 @@ public class SecurityConfiguration {
                                             "/api/auth/refresh",
                                             "/api/auth/totp/verify",
                                             "/api/auth/logout",
-                                            "/api/auth/csrf")
+                                            "/api/auth/csrf",
+                                            // Восстановление доступа по почте по определению
+                                            // вызывается без сессии; защита — одноразовый код,
+                                            // лимит попыток и rate limit по IP.
+                                            "/api/auth/password/reset/request",
+                                            "/api/auth/password/reset/confirm")
                                     .permitAll()
                                     .requestMatchers(
                                             "/actuator/health",
@@ -112,17 +117,13 @@ public class SecurityConfiguration {
                             if (securityProperties.isAuthEnabled()) {
                                 auth.requestMatchers("/api/admin/**")
                                         .hasAuthority(Role.ROLE_ADMIN.name())
-                                        .requestMatchers(
-                                                "/api/me/**",
-                                                "/api/auth/password",
-                                                "/api/auth/backup-codes")
+                                        .requestMatchers("/api/me/**", "/api/auth/password")
                                         .authenticated();
                             } else {
                                 auth.requestMatchers(
                                                 "/api/admin/**",
                                                 "/api/me/**",
-                                                "/api/auth/password",
-                                                "/api/auth/backup-codes")
+                                                "/api/auth/password")
                                         .permitAll();
                             }
 
@@ -139,7 +140,8 @@ public class SecurityConfiguration {
     /**
      * BREACH-защита: значение токена в теле/заголовке маскируется случайной солью. Так как токен
      * читается из заголовка, а не из параметра формы, применяем обработчик как есть.
-     */    private CsrfTokenRequestAttributeHandler csrfTokenRequestHandler() {
+     */
+    private CsrfTokenRequestAttributeHandler csrfTokenRequestHandler() {
         CsrfTokenRequestAttributeHandler handler = new CsrfTokenRequestAttributeHandler();
         handler.setCsrfRequestAttributeName(null);
         return handler;

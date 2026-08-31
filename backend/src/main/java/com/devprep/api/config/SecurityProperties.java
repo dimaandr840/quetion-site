@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Настройки защиты аутентификации: cookie, блокировка учёток, rate limit, 2FA. */
+/** Настройки защиты аутентификации: cookie, блокировка учёток, rate limit, 2FA, сброс пароля. */
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "devprep.security")
@@ -22,6 +22,7 @@ public class SecurityProperties {
     private final Lockout lockout = new Lockout();
     private final RateLimit rateLimit = new RateLimit();
     private final Totp totp = new Totp();
+    private final PasswordReset passwordReset = new PasswordReset();
 
     @Getter
     @Setter
@@ -81,5 +82,40 @@ public class SecurityProperties {
          * (допустимо только в разработке).
          */
         private String encryptionKey = "";
+    }
+
+    /**
+     * Самостоятельное восстановление доступа по почте (замена резервных кодов).
+     *
+     * <p>Сам адрес нигде не настраивается: код уходит только на адрес учётки и только если он
+     * совпал с введённым.
+     */
+    @Getter
+    @Setter
+    public static class PasswordReset {
+
+        /** false полностью закрывает публичный сброс: остаётся только CLI-восстановление. */
+        private boolean enabled = true;
+
+        /** Сколько живёт код из письма. */
+        private Duration ttl = Duration.ofMinutes(15);
+
+        /** Пауза между письмами: без неё форма становится бесплатным отправщиком писем. */
+        private Duration cooldown = Duration.ofMinutes(1);
+
+        /** После этого числа неверных вводов код аннулируется. */
+        private int maxAttempts = 5;
+
+        /**
+         * Стирать ли привязку аутентификатора при успешном сбросе. true заменяет резервные коды в
+         * сценарии «потерял телефон», но делает почтовый ящик единственным фактором восстановления:
+         * если это неприемлемо, выставляется false и 2FA сбрасывается только с сервера.
+         */
+        private boolean resetTotp = true;
+
+        /** Адрес в поле From. Пусто — письма не отправляются. */
+        private String mailFrom = "";
+
+        private String mailSubject = "DevPrep: код для восстановления доступа";
     }
 }

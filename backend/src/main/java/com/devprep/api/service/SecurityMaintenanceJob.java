@@ -1,6 +1,7 @@
 package com.devprep.api.service;
 
 import com.devprep.api.repository.LoginAttemptRepository;
+import com.devprep.api.repository.PasswordResetTokenRepository;
 import com.devprep.api.repository.RefreshTokenRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,8 +25,12 @@ public class SecurityMaintenanceJob {
 
     private static final Duration ATTEMPT_RETENTION = Duration.ofDays(30);
 
+    /** Просроченные коды восстановления не нужны вообще: они уже неработоспособны. */
+    private static final Duration RESET_CODE_RETENTION = Duration.ofHours(1);
+
     private final RefreshTokenRepository refreshTokenRepository;
     private final LoginAttemptRepository loginAttemptRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Scheduled(cron = "0 15 3 * * *")
     @Transactional
@@ -33,8 +38,15 @@ public class SecurityMaintenanceJob {
         Instant now = Instant.now();
         int tokens = refreshTokenRepository.deleteExpiredBefore(now.minus(TOKEN_RETENTION));
         int attempts = loginAttemptRepository.deleteOlderThan(now.minus(ATTEMPT_RETENTION));
-        if (tokens > 0 || attempts > 0) {
-            log.info("Очистка: удалено {} refresh-токенов и {} записей о входах", tokens, attempts);
+        int resetCodes =
+                passwordResetTokenRepository.deleteExpiredBefore(now.minus(RESET_CODE_RETENTION));
+        if (tokens > 0 || attempts > 0 || resetCodes > 0) {
+            log.info(
+                    "Очистка: удалено {} refresh-токенов, {} записей о входах и {} кодов"
+                            + " восстановления",
+                    tokens,
+                    attempts,
+                    resetCodes);
         }
     }
 }

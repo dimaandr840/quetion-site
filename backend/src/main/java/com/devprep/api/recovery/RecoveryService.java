@@ -4,7 +4,6 @@ import com.devprep.api.domain.AppUser;
 import com.devprep.api.domain.Role;
 import com.devprep.api.repository.AppUserRepository;
 import com.devprep.api.repository.RefreshTokenRepository;
-import com.devprep.api.service.BackupCodeService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,10 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Аварийное восстановление доступа: сброс пароля, сброс привязки 2FA, новые резервные коды.
+ * Аварийное восстановление доступа: сброс пароля, сброс привязки 2FA, снятие блокировки.
  *
  * <p>Вызывается только из {@link RecoveryRunner} — в HTTP-слой эта логика не выведена намеренно:
- * единственное доказательство прав — доступ к серверу.
+ * единственное доказательство прав — доступ к серверу. Рядовое «забыл пароль» решается сбросом
+ * по почте без участия администратора сервера.
  */
 @Slf4j
 @Service
@@ -31,11 +31,10 @@ public class RecoveryService {
 
     private final AppUserRepository appUserRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final BackupCodeService backupCodeService;
     private final PasswordEncoder passwordEncoder;
 
     /** Итог восстановления для печати в лог. */
-    public record Result(boolean success, List<String> actions, List<String> backupCodes) {}
+    public record Result(boolean success, List<String> actions) {}
 
     @Transactional
     public Result execute(RecoveryProperties options) {
@@ -47,7 +46,7 @@ public class RecoveryService {
             log.error(
                     "--recovery.password короче {} символов — восстановление отменено",
                     MIN_PASSWORD_LENGTH);
-            return new Result(false, List.of(), List.of());
+            return new Result(false, List.of());
         }
 
         Instant now = Instant.now();
@@ -63,7 +62,7 @@ public class RecoveryService {
                         "Пользователь {} не найден, а --recovery.password не задан — создавать"
                                 + " админа нечем",
                         email);
-                return new Result(false, List.of(), List.of());
+                return new Result(false, List.of());
             }
             user =
                     AppUser.builder()
@@ -100,16 +99,10 @@ public class RecoveryService {
         }
         user = appUserRepository.save(user);
 
-        List<String> codes = List.of();
-        if (options.isNewCodes()) {
-            codes = backupCodeService.reissue(user);
-            actions.add("выпущены новые резервные коды");
-        }
-
         // После любого восстановления активные сессии больше не доверенные.
         int revoked = refreshTokenRepository.revokeAllForUser(user, now);
         actions.add("отозвано сессий: " + revoked);
 
-        return new Result(true, actions, codes);
+        return new Result(true, actions);
     }
 }
