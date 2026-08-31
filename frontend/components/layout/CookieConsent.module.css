@@ -1,68 +1,120 @@
 .banner {
   position: fixed;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   bottom: 0;
-  z-index: 90;
-  padding: var(--space-16);
-  background: var(--surface);
+  z-index: 60;
+  padding-block: var(--space-16);
+  background: var(--surface-muted);
   border-top: 1px solid var(--border-base);
-  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 12%);
 }
 
 .inner {
-  max-width: 1200px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-24);
+  flex-wrap: wrap;
 }
 
-.text {
+.texts {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  max-width: 720px;
+  gap: 4px;
+  /* Текст сжимается первым, кнопки остаются целыми. */
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .title {
+  margin: 0;
   font-family: var(--font-outfit), system-ui, sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.description {
+.text {
+  margin: 0;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .link {
   color: var(--accent);
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--accent-hover);
 }
 
 .actions {
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 760px) {
-  .inner {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-16);
-  }
+.decline,
+.accept {
+  min-height: 40px;
+  padding-inline: var(--space-16);
+  border-radius: var(--radius-12);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
 
+.decline {
+  background: transparent;
+  border: 1px solid var(--border-base);
+  color: var(--text-primary);
+}
+
+.decline:hover {
+  border-color: var(--text-muted);
+}
+
+.accept {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+
+.accept:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/*
+ * Кнопка отзыва согласия встаёт в строку текста и в подвал, где выглядит
+ * ссылкой. Сбрасываем собственные стили button, чтобы она наследовала
+ * типографику места, куда её поставили: внешний класс приходит извне
+ * и не обязан гасить фон и рамку браузера.
+ */
+.reset {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
   .actions {
-    flex-direction: column-reverse;
+    width: 100%;
   }
 
-  .actions > * {
-    width: 100%;
+  .decline,
+  .accept {
+    flex: 1 1 auto;
   }
 }
