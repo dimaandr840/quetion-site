@@ -1,0 +1,86 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-question-image
+      author: devprep
+      changes:
+        # Картинки вопроса. Сами файлы лежат в объектном хранилище (Cloudflare R2),
+        # в базе — только ключ объекта и метаданные для рендера: alt обязателен
+        # (доступность и SEO), width/height нужны next/image, чтобы не дёргать
+        # вёрстку при загрузке.
+        - createTable:
+            tableName: question_image
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: question_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: storage_key
+                  type: varchar(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: alt
+                  type: varchar(300)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: caption
+                  type: varchar(500)
+              - column:
+                  name: width
+                  type: int
+              - column:
+                  name: height
+                  type: int
+              - column:
+                  name: content_type
+                  type: varchar(60)
+              - column:
+                  name: byte_size
+                  type: bigint
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: question_image
+            baseColumnNames: question_id
+            constraintName: fk_question_image_question
+            referencedTableName: question
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createIndex:
+            tableName: question_image
+            indexName: idx_question_image_question
+            columns:
+              - column:
+                  name: question_id
+        # Один и тот же объект не должен оказаться привязан к двум вопросам:
+        # иначе удаление одного из них убрало бы файл у второго.
+        - createIndex:
+            tableName: question_image
+            indexName: uq_question_image_storage_key
+            unique: true
+            columns:
+              - column:
+                  name: storage_key
