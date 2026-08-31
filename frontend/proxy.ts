@@ -11,9 +11,10 @@ import { themeInitScript } from "@/lib/theme";
  * читаемая и не является токеном — подделать её можно, но это даёт лишь
  * доступ к пустой оболочке админки, любые данные API вернёт 401/403.
  *
- * Второе назначение файла — Content-Security-Policy с nonce для /admin и /login.
- * Nonce нельзя выдать из nginx (там нет генератора на запрос), поэтому эти два
- * маршрута получают CSP отсюда, а публичные страницы — из nginx (и остаются
+ * Второе назначение файла — Content-Security-Policy с nonce для /admin и /login
+ * (включая /login/reset — восстановление доступа по почте).
+ * Nonce нельзя выдать из nginx (там нет генератора на запрос), поэтому эти
+ * маршруты получают CSP отсюда, а публичные страницы — из nginx (и остаются
  * статическими: расширение matcher сделало бы динамическим весь сайт).
  */
 const SESSION_HINT_COOKIE = "dp_session";
@@ -113,6 +114,8 @@ export async function proxy(request: NextRequest) {
     }
 
     // Залогиненного админа со страницы входа отправляем в админку.
+    // Страница восстановления сознательно не редиректится: сброс может
+    // потребоваться и при живой сессии в другом браузере.
     if (pathname === "/login" && hint === "admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
@@ -129,5 +132,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/login"],
+  matcher: ["/admin/:path*", "/login", "/login/:path*"],
 };

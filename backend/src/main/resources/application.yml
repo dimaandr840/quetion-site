@@ -40,6 +40,21 @@ spring:
   threads:
     virtual:
       enabled: true
+  # SMTP нужен только для писем с кодом восстановления доступа.
+  # Если SMTP_HOST пуст, сервис запускается как обычно, но сброс пароля
+  # по почте не работает (в логах будет ошибка о ненастроенном SMTP).
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
+      mail.smtp.starttls.required: ${SMTP_STARTTLS:true}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 devprep:
   seed:
@@ -76,6 +91,20 @@ devprep:
       # Пустой — TOTP-секреты хранятся в БД открыто (только для разработки).
       encryption-key: ${TOTP_ENC_KEY:}
       issuer: DevPrep
+    # Самостоятельное восстановление доступа по почте (замена резервных кодов).
+    # Адрес получателя не настраивается: код уходит только на адрес учётки
+    # и только если он совпал с введённым; в ответе API и в UI он всегда замаскирован.
+    password-reset:
+      enabled: ${PASSWORD_RESET_ENABLED:true}
+      ttl: ${PASSWORD_RESET_TTL:PT15M}
+      cooldown: ${PASSWORD_RESET_COOLDOWN:PT1M}
+      max-attempts: ${PASSWORD_RESET_MAX_ATTEMPTS:5}
+      # true стирает привязку аутентификатора при успешном сбросе — это замена
+      # резервным кодам в сценарии «потерял телефон», но делает почту
+      # единственным фактором восстановления.
+      reset-totp: ${PASSWORD_RESET_RESET_TOTP:true}
+      # Адрес в поле From. Пусто — письма не отправляются.
+      mail-from: ${PASSWORD_RESET_MAIL_FROM:}
   search:
     enabled: ${MEILI_ENABLED:false}
     host: ${MEILI_HOST:http://localhost:7700}

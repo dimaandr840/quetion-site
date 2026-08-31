@@ -17,8 +17,7 @@ import org.springframework.stereotype.Component;
  *   java -jar /app/app.jar \
  *   --recovery.email=admin@example.com \
  *   --recovery.password='новый-очень-длинный-пароль' \
- *   --recovery.reset-totp=true \
- *   --recovery.new-codes=true
+ *   --recovery.reset-totp=true
  * </pre>
  *
  * <p>Процесс выполняет восстановление, печатает результат и завершается: HTTP-порт в этом режиме
@@ -56,13 +55,6 @@ public class RecoveryRunner implements ApplicationRunner {
 
         log.warn("Восстановление выполнено для {}", options.getEmail().trim().toLowerCase());
         result.actions().forEach(action -> log.warn("  - {}", action));
-        if (!result.backupCodes().isEmpty()) {
-            log.warn("Новые резервные коды (показываются один раз):");
-            result.backupCodes().forEach(code -> log.warn("  {}", code));
-            log.warn(
-                    "Коды попали в лог. Перенесите их в менеджер паролей, после чего очистите"
-                            + " логи или выпустите набор заново через UI");
-        }
         log.warn("Не забудьте почистить history оболочки: пароль был передан в командной строке");
         exit(0);
     }

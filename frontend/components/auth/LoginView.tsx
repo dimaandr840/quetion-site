@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { QrCode } from "@/components/ui/QrCode";
 import { ApiError } from "@/lib/api";
 import {
   login as loginRequest,
@@ -24,6 +25,7 @@ export function LoginView() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [setup, setSetup] = useState<TotpSetup | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -44,6 +46,7 @@ export function LoginView() {
     } else {
       setSetup(null);
     }
+    setShowSecret(false);
     setStep("totp");
     setCode("");
   }
@@ -170,6 +173,10 @@ export function LoginView() {
                 {pending ? "Проверяем..." : "Войти"}
               </button>
 
+              <Link href="/login/reset" className={styles.link}>
+                Забыли пароль или потеряли телефон?
+              </Link>
+
               <Link href="/" className={styles.link}>
                 Вернуться на сайт
               </Link>
@@ -182,18 +189,38 @@ export function LoginView() {
             </h1>
             <p className={styles.subtitle}>
               {setup
-                ? "Добавьте секрет в Google Authenticator, 1Password или Aegis, затем введите шестизначный код."
+                ? "Отсканируйте код в Google Authenticator, 1Password или Aegis, затем введите шестизначный код из приложения."
                 : "Введите шестизначный код из приложения-аутентификатора."}
             </p>
 
             {setup && (
               <div className={styles.secretBox}>
-                <span className={styles.secretLabel}>Секретный ключ</span>
-                <span className={styles.secretValue}>{setup.secret}</span>
+                <div className={styles.qrWrap}>
+                  <QrCode
+                    value={setup.provisioningUri}
+                    label="QR-код для приложения-аутентификатора"
+                  />
+                </div>
                 <span className={styles.hint}>
-                  Ключ показывается один раз. Введённый ниже код подтвердит, что
-                  приложение настроено корректно.
+                  Приложение само подставит название учётной записи и ключ —
+                  вводить ничего не нужно. Код показывается один раз, до
+                  подтверждения.
                 </span>
+
+                {showSecret ? (
+                  <>
+                    <span className={styles.secretLabel}>Секретный ключ</span>
+                    <span className={styles.secretValue}>{setup.secret}</span>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.link}
+                    onClick={() => setShowSecret(true)}
+                  >
+                    Камера недоступна? Показать ключ для ручного ввода
+                  </button>
+                )}
               </div>
             )}
 
@@ -231,12 +258,17 @@ export function LoginView() {
                 {pending ? "Проверяем..." : "Подтвердить"}
               </button>
 
+              <Link href="/login/reset" className={styles.link}>
+                Нет доступа к приложению? Восстановить доступ по почте
+              </Link>
+
               <button
                 type="button"
                 className={styles.link}
                 onClick={() => {
                   setStep("credentials");
                   setSetup(null);
+                  setShowSecret(false);
                   setError(null);
                   setPassword("");
                 }}

@@ -3,6 +3,7 @@ package com.devprep.api.web;
 import com.devprep.api.security.AuthCookieService;
 import com.devprep.api.service.AuthOutcome;
 import com.devprep.api.service.AuthService;
+import com.devprep.api.service.PasswordResetService;
 import com.devprep.api.web.dto.AuthRequests;
 import com.devprep.api.web.dto.AuthResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(
@@ -87,21 +89,29 @@ public class AuthController {
                 .build();
     }
 
-    /** Сколько резервных кодов осталось. Сами коды повторно узнать нельзя. */
-    @GetMapping("/backup-codes")
-    public ResponseEntity<AuthResponse.BackupCodesStatusDto> backupCodesStatus(
-            Authentication authentication) {
-        return ResponseEntity.ok(authService.backupCodesStatus(authentication.getName()));
+    /**
+     * Шаг 1 восстановления доступа: человек вводит адрес, код уходит на него только при
+     * совпадении с адресом учётки.
+     *
+     * <p>Всегда 202 с одним и тем же телом: по ответу нельзя определить, зарегистрирован ли
+     * адрес. В {@code emailHint} уходит только маска.
+     */
+    @PostMapping("/password/reset/request")
+    public ResponseEntity<AuthResponse.PasswordResetRequestedDto> requestPasswordReset(
+            @Valid @RequestBody AuthRequests.PasswordResetRequest request,
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.accepted()
+                .body(passwordResetService.request(request.email(), clientIp(httpRequest)));
     }
 
-    /**
-     * Выпускает новый набор резервных кодов взамен старого. Ответ — единственный шанс их
-     * сохранить.
-     */
-    @PostMapping("/backup-codes")
-    public ResponseEntity<AuthResponse.BackupCodesDto> reissueBackupCodes(
-            Authentication authentication) {
-        return ResponseEntity.ok(authService.reissueBackupCodes(authentication.getName()));
+    /** Шаг 2 восстановления доступа: код из письма и новый пароль. Гасит все сессии. */
+    @PostMapping("/password/reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(
+            @Valid @RequestBody AuthRequests.PasswordResetConfirm request,
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.noContent()
+                .headers(headers(passwordResetService.confirm(request, clientIp(httpRequest))))
+                .build();
     }
 
     /**

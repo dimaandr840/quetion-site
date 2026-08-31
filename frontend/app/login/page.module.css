@@ -131,9 +131,19 @@
   background: var(--accent-soft);
   border-radius: var(--radius-8);
   padding: var(--space-16);
+  margin-bottom: var(--space-16);
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-12);
+}
+
+/* Белая подложка под QR: на тёмной теме код иначе не читается камерой. */
+.qrWrap {
+  display: flex;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: var(--radius-8);
+  padding: var(--space-12);
 }
 
 .secretLabel {

@@ -15,18 +15,30 @@ public record AuthRequests() {
             @NotBlank @Size(max = 128) String displayName) {}
 
     /**
-     * Второй шаг входа: 6-значный код из приложения-аутентификатора либо резервный код вида
-     * {@code XXXX-XXXX-XXXX}.
+     * Второй шаг входа: 6-значный код из приложения-аутентификатора. Резервные коды больше не
+     * принимаются: потерянный второй фактор восстанавливается кодом из письма.
      */
     public record TotpVerify(
-            @NotBlank
-                    @Pattern(
-                            regexp = "\\d{6}|(?:[A-Za-z0-9]{4}[- ]?){2}[A-Za-z0-9]{4}",
-                            message = "Нужен 6-значный код или резервный код")
-                    String code) {}
+            @NotBlank @Pattern(regexp = "\\d{6}", message = "Нужен 6-значный код") String code) {}
 
     /** Смена пароля. Отзывает все refresh-токены пользователя. */
     public record ChangePassword(
             @NotBlank String currentPassword,
+            @NotBlank @Size(min = 10, max = 128) String newPassword) {}
+
+    /**
+     * Шаг 1 восстановления доступа: пользователь сам вводит адрес. Код уйдёт только если
+     * адрес совпадёт с адресом учётки; ответ одинаковый в любом случае.
+     */
+    public record PasswordResetRequest(@Email @NotBlank @Size(max = 256) String email) {}
+
+    /** Шаг 2 восстановления доступа: код из письма и новый пароль. */
+    public record PasswordResetConfirm(
+            @Email @NotBlank @Size(max = 256) String email,
+            @NotBlank
+                    @Pattern(
+                            regexp = "[A-Za-z0-9]{4}[- ]?[A-Za-z0-9]{4}",
+                            message = "Нужен код вида XXXX-XXXX")
+                    String code,
             @NotBlank @Size(min = 10, max = 128) String newPassword) {}
 }

@@ -42,6 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>для ROLE_ADMIN обязателен TOTP: без подтверждённого второго фактора выдаётся только
  *       короткоживущий промежуточный токен, который не даёт доступа к API.
  * </ul>
+ *
+ * <p>Потерянный пароль или телефон восстанавливаются кодом из письма — см. {@link
+ * PasswordResetService}.
  */
 @Slf4j
 @Service
@@ -65,7 +68,6 @@ public class AuthService {
     private final JwtService jwtService;
     private final TotpService totpService;
     private final TotpSecretCipher totpSecretCipher;
-    private final BackupCodeService backupCodeService;
     private final AuthCookieService cookieService;
     private final SecurityProperties securityProperties;
 
@@ -123,7 +125,12 @@ public class AuthService {
         return continueAfterPassword(user, ip, userAgent);
     }
 
-    /** Второй шаг входа: проверка TOTP-кода по промежуточному mfa-токену. */
+    /**
+     * Второй шаг входа: проверка TOTP-кода по промежуточному mfa-токену.
+     *
+     * <p>Принимается только 6-значный код из приложения-аутентификатора: резервные коды из контура
+     * входа убраны, потерянный второй фактор восстанавливается через почту.
+     */
     @Transactional
     public AuthOutcome verifyTotp(
             String mfaToken, AuthRequests.TotpVerify request, String ip, String userAgent) {
@@ -141,31 +148,22 @@ public class AuthService {
         if (securityProperties.getLockout().isEnabled() && user.isLocked(now)) {
             throw new AccountLockedException(Duration.between(now, user.getLockoutUntil()));
         }
-        if (request.code().trim().matches("\\d{6}")) {
-            String secret = totpSecretCipher.decrypt(user.getTotpSecret());
-            // Код одноразовый: шаг, который уже применялся, второй раз не принимается.
-            OptionalLong step =
-                    secret == null
-                            ? OptionalLong.empty()
-                            : totpService.verifyAndGetStep(
-                                    secret, request.code(), user.getTotpLastUsedStep());
-            if (step.isEmpty()) {
-                registerFailure(user, ip, now);
-                throw new BadCredentialsException("Неверный код подтверждения");
-            }
-            user.setTotpLastUsedStep(step.getAsLong());
-            // Унаследованные открытые секреты перешифровываются при первом же успешном входе.
-            if (totpSecretCipher.needsRewrap(user.getTotpSecret())) {
-                user.setTotpSecret(totpSecretCipher.encrypt(secret));
-            }
-        } else {
-            // Резервный код идёт через тот же счётчик неудач: перебор упирается в блокировку
-            // учётки и rate limit по IP, а сам код несёт ~60 бит энтропии.
-            if (!user.isTotpEnabled()
-                    || !backupCodeService.verifyAndConsume(user, request.code())) {
-                registerFailure(user, ip, now);
-                throw new BadCredentialsException("Неверный код подтверждения");
-            }
+
+        String secret = totpSecretCipher.decrypt(user.getTotpSecret());
+        // Код одноразовый: шаг, который уже применялся, второй раз не принимается.
+        OptionalLong step =
+                secret == null
+                        ? OptionalLong.empty()
+                        : totpService.verifyAndGetStep(
+                                secret, request.code().trim(), user.getTotpLastUsedStep());
+        if (step.isEmpty()) {
+            registerFailure(user, ip, now);
+            throw new BadCredentialsException("Неверный код подтверждения");
+        }
+        user.setTotpLastUsedStep(step.getAsLong());
+        // Унаследованные открытые секреты перешифровываются при первом же успешном входе.
+        if (totpSecretCipher.needsRewrap(user.getTotpSecret())) {
+            user.setTotpSecret(totpSecretCipher.encrypt(secret));
         }
 
         if (!user.isTotpEnabled()) {
@@ -181,7 +179,7 @@ public class AuthService {
 
     /**
      * Ротация: старый refresh-токен отзывается, выпускается новая пара. Повторное использование уже
-     * отозван��ого токена трактуется как компрометация — все сессии пользователя гасятся.
+     * отозванного токена трактуется как компрометация — все сессии пользователя гасятся.
      */
     @Transactional
     public AuthOutcome refresh(String refreshToken, String ip, String userAgent) {
@@ -267,33 +265,6 @@ public class AuthService {
         return List.of(cookieService.clearAll());
     }
 
-    /** Сколько резервных кодов осталось у текущего пользователя. */
-    @Transactional(readOnly = true)
-    public AuthResponse.BackupCodesStatusDto backupCodesStatus(String email) {
-        AppUser user = requireUser(email);
-        return new AuthResponse.BackupCodesStatusDto(
-                backupCodeService.countRemaining(user),
-                backupCodeService.countTotal(user),
-                backupCodeService.countRemaining(user) <= BackupCodeService.LOW_WATERMARK);
-    }
-
-    /**
-     * Выпускает новый набор резервных кодов взамен старого. Коды отдаются ровно один раз —
-     * повторно их узнать нельзя, в БД лежат только хеши.
-     */
-    @Transactional
-    public AuthResponse.BackupCodesDto reissueBackupCodes(String email) {
-        AppUser user = requireUser(email);
-        List<String> codes = backupCodeService.reissue(user);
-        return new AuthResponse.BackupCodesDto(codes);
-    }
-
-    private AppUser requireUser(String email) {
-        return appUserRepository
-                .findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new BadCredentialsException("Пользователь недоступен"));
-    }
-
     private AuthOutcome continueAfterPassword(AppUser user, String ip, String userAgent) {
         if (!requiresTotp(user)) {
             return startSession(user, ip, userAgent);
@@ -305,7 +276,7 @@ public class AuthService {
                     List.of(cookieService.mfaCookie(mfa.token(), jwtService.mfaTokenTtl())));
         }
         // Принудительный enroll: секрет сохраняем сразу, но включаем 2FA только после
-        // подтверждения кодом — иначе прерванная настройка навсегда ��акрыла бы доступ.
+        // подтверждения кодом — иначе прерванная настройка навсегда закрыла бы доступ.
         String existing = totpSecretCipher.decrypt(user.getTotpSecret());
         String secret = existing != null ? existing : totpService.generateSecret();
         user.setTotpSecret(totpSecretCipher.encrypt(secret));
@@ -376,7 +347,7 @@ public class AuthService {
         if (config.isEnabled() && attempts >= config.getMaxAttempts()) {
             user.setLockoutUntil(now.plus(config.getDuration()));
             user.setFailedLoginAttempts(0);
-            log.warn("Учётка {} заблоки��ована на {}", user.getEmail(), config.getDuration());
+            log.warn("Учётка {} заблокирована на {}", user.getEmail(), config.getDuration());
         }
         appUserRepository.save(user);
         recordAttempt(user.getEmail(), ip, false, now);

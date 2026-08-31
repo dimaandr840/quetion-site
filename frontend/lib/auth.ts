@@ -25,6 +25,14 @@ export interface AuthResponse {
   totpSetup?: TotpSetup;
 }
 
+/**
+ * Ответ на запрос восстановления доступа. Адреса получателя здесь нет намеренно:
+ * сервер его не отдаёт даже маской, поэтому показать его в интерфейсе нечем.
+ */
+export interface PasswordResetRequested {
+  expiresInMinutes: number;
+}
+
 /** Читаемая (не httpOnly) cookie-подсказка о текущей сессии. */
 export const SESSION_HINT_COOKIE = "dp_session";
 
@@ -58,5 +66,25 @@ export function changePassword(currentPassword: string, newPassword: string) {
   return apiFetch<void>("/auth/password", {
     method: "POST",
     body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+/** Шаг 1 восстановления доступа: заказать код на адрес учётки. */
+export function requestPasswordReset(email: string) {
+  return apiFetch<PasswordResetRequested>("/auth/password/reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+/** Шаг 2 восстановления доступа: код из письма и новый пароль. Гасит все сессии. */
+export function confirmPasswordReset(
+  email: string,
+  code: string,
+  newPassword: string
+) {
+  return apiFetch<void>("/auth/password/reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ email, code, newPassword }),
   });
 }
