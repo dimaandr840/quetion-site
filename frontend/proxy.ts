@@ -20,6 +20,21 @@ const SESSION_HINT_COOKIE = "dp_session";
 const CSP_HEADER = "content-security-policy";
 
 /**
+ * Источник картинок вопросов лежит на внешнем домене (R2 или CDN), а img-src в CSP
+ * разрешает только 'self'. Без этого исключения превью в админке блокируется браузером.
+ * Берём только origin: пути в CSP сравниваются как префиксы и лишней точности не дают.
+ */
+const MEDIA_ORIGIN = (() => {
+  const raw = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+})();
+
+/**
  * Заголовки безопасности для закрытой части. Они важны именно здесь:
  * редиректы на /login формирует этот файл, и ответ минует часть цепочки настроек.
  * Страницы админки не должны попадать ни в кэш прокси, ни в индекс поисковиков,
@@ -76,6 +91,10 @@ function createNonce(): string {
  * Для style-src 'unsafe-inline' убрать нельзя — его требует next/font.
  */
 function buildCsp(nonce: string, themeHash: string): string {
+  const imgSrc = ["img-src 'self' data: blob:", MEDIA_ORIGIN]
+    .filter(Boolean)
+    .join(" ");
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -84,7 +103,7 @@ function buildCsp(nonce: string, themeHash: string): string {
     "form-action 'self'",
     `script-src 'self' 'nonce-${nonce}' 'sha256-${themeHash}'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    imgSrc,
     "font-src 'self' data:",
     "connect-src 'self'",
     "manifest-src 'self'",

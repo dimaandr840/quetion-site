@@ -23,6 +23,22 @@ export interface PracticeTask {
 }
 
 /**
+ * Картинка вопроса.
+ *
+ * `storageKey` — ключ объекта в хранилище и единственное, что отправляется на запись;
+ * `url` всегда приходит от бэкенда и зависит от того, какой домен настроен в момент запроса.
+ * `width`/`height` нужны next/image, чтобы вёрстка не прыгала при загрузке.
+ */
+export interface QuestionImage {
+  storageKey: string;
+  url?: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
+/**
  * Вопрос в списках: то, что отдаёт QuestionSummaryDto. Без тела ответа.
  * `path` («Профессия > Специализация > Тема») считает бэкенд.
  */
@@ -42,6 +58,7 @@ export interface QuestionSummary {
 export interface Question extends QuestionSummary {
   sections: AnswerSection[];
   tasks?: PracticeTask[];
+  images?: QuestionImage[];
   published?: boolean;
   /** Соседи и похожие приходят вместе с вопросом: QuestionDetailDto. */
   related?: QuestionSummary[];
