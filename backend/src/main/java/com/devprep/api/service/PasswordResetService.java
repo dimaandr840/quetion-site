@@ -27,8 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Главное свойство: адрес, на который уходит код, нигде не раскрывается. Пользователь сам
  * вводит адрес; если он совпал с адресом включённой учётки — письмо отправляется, если нет —
- * не отправляется. Ответ API в обоих случаях одинаковый и содержит только маску того, что
- * ввел сам пользователь — так форма не становится проверкой существования аккаунтов.
+ * не отправляется. Ответ API в обоих случаях побайтово одинаковый и не содержит ни адреса, ни
+ * его маски, поэтому форма не превращается ни в справочник почтовых адресов, ни в проверку
+ * существования аккаунтов. По той же причине ни адрес, ни код не пишутся в логи.
  *
  * <p>Ограничители злоупотреблений: rate limit по IP (общий с входом), пауза между письмами,
  * один активный код на учётку, лимит попыток ввода и ограниченный срок жизни кода.
@@ -58,16 +59,15 @@ public class PasswordResetService {
     /**
      * Шаг 1: запрос кода.
      *
-     * <p>Ответ не зависит от того, существует ли учётка: всегда возвращается маска введённого
-     * адреса и срок жизни кода.
+     * <p>Ответ не зависит от того, существует ли учётка: всегда возвращается только срок жизни
+     * кода.
      */
     @Transactional
     public AuthResponse.PasswordResetRequestedDto request(String rawEmail, String ip) {
         SecurityProperties.PasswordReset config = securityProperties.getPasswordReset();
-        String email = normalizeEmail(rawEmail);
         AuthResponse.PasswordResetRequestedDto response =
                 new AuthResponse.PasswordResetRequestedDto(
-                        maskEmail(email), Math.max(1, config.getTtl().toMinutes()));
+                        Math.max(1, config.getTtl().toMinutes()));
 
         if (!config.isEnabled()) {
             log.warn("Запрошен сброс пароля, но он отключён настройками");
@@ -77,6 +77,7 @@ public class PasswordResetService {
         Instant now = Instant.now();
         enforceIpRateLimit(ip, now);
 
+        String email = normalizeEmail(rawEmail);
         Optional<AppUser> found =
                 appUserRepository.findByEmailIgnoreCase(email).filter(AppUser::isEnabled);
         if (found.isEmpty()) {
@@ -136,7 +137,7 @@ public class PasswordResetService {
                 appUserRepository
                         .findByEmailIgnoreCase(email)
                         .filter(AppUser::isEnabled)
-                        .orElseGet(() -> null);
+                        .orElse(null);
         if (user == null) {
             recordFailure(email, ip, now);
             throw new BadCredentialsException(INVALID_CODE);
@@ -205,35 +206,6 @@ public class PasswordResetService {
     /** Код сравнивается без регистра, дефисов и пробелов: его копируют руками. */
     private static String normalizeCode(String code) {
         return code == null ? "" : code.toUpperCase().replaceAll("[^A-Z0-9]", "");
-    }
-
-    /**
-     * Маска вида {@code d****@g****.com}: подсказка достаточна, чтобы узнать свой адрес, но
-     * недостаточна, чтобы его узнать со стороны.
-     */
-    private static String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 0 || at == email.length() - 1) {
-            return maskPart(email);
-        }
-        String local = email.substring(0, at);
-        String domain = email.substring(at + 1);
-        int dot = domain.lastIndexOf('.');
-        String masked =
-                dot <= 0
-                        ? maskPart(domain)
-                        : maskPart(domain.substring(0, dot)) + domain.substring(dot);
-        return maskPart(local) + "@" + masked;
-    }
-
-    private static String maskPart(String value) {
-        if (value == null || value.isEmpty()) {
-            return "";
-        }
-        if (value.length() == 1) {
-            return value;
-        }
-        return value.charAt(0) + "*".repeat(value.length() - 1);
     }
 
     /**
