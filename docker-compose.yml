@@ -88,6 +88,19 @@ services:
       TOTP_REQUIRED_FOR_ADMINS: ${TOTP_REQUIRED_FOR_ADMINS:-true}
       # Без ключа TOTP-секреты легли бы в БД открытым текстом, поэтому переменная обязательна.
       TOTP_ENC_KEY: "${TOTP_ENC_KEY:?TOTP_ENC_KEY обязателен, см. openssl rand -base64 32}"
+      # SMTP для писем с кодом восстановления доступа. Если SMTP_HOST или
+      # PASSWORD_RESET_MAIL_FROM пусты, сервис запускается, но письма не уходят.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      PASSWORD_RESET_ENABLED: ${PASSWORD_RESET_ENABLED:-true}
+      PASSWORD_RESET_MAIL_FROM: ${PASSWORD_RESET_MAIL_FROM:-}
+      PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-PT15M}
+      PASSWORD_RESET_COOLDOWN: ${PASSWORD_RESET_COOLDOWN:-PT1M}
+      PASSWORD_RESET_MAX_ATTEMPTS: ${PASSWORD_RESET_MAX_ATTEMPTS:-5}
+      PASSWORD_RESET_RESET_TOTP: ${PASSWORD_RESET_RESET_TOTP:-true}
       SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-false}
       MANAGEMENT_ENDPOINTS: ${MANAGEMENT_ENDPOINTS:-health,info}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -103,7 +116,7 @@ services:
 
   web:
     <<: *hardening
-    # Next.js пишет в .next/cache на рантаиме (ISR, оптимизация картинок),
+    # Next.js пишет в .next/cache на рантайме (ISR, оптимизация картинок),
     # поэтому read_only здесь не включаем — только сбрасываем capabilities.
     cap_drop:
       - ALL
