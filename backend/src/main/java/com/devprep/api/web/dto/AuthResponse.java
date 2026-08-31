@@ -22,17 +22,17 @@ public record AuthResponse(Status status, long expiresIn, UserDto user, TotpSetu
 
     public record UserDto(String email, String displayName, Set<Role> roles) {}
 
-    /**
-     * Ответ на запрос кода восстановления доступа.
-     *
-     * <p>{@code emailHint} — маска адреса, который ввёл сам пользователь ({@code d****@g****.com}).
-     * Полный адрес учётки наружу не отдаётся никогда, а одинаковый ответ для существующего и
-     * несуществующего адреса не позволяет перечислять учётки.
-     */
-    public record PasswordResetRequestedDto(String emailHint, long expiresInMinutes) {}
-
     /** Данные для первичной настройки 2FA. Отдаются один раз, до подтверждения кодом. */
     public record TotpSetupDto(String secret, String provisioningUri) {}
+
+    /**
+     * Ответ на запрос восстановления доступа.
+     *
+     * <p>{@code emailHint} — только маска вида {@code d****@g****.com}. Полный адрес не
+     * возвращается никогда и ни при каких условиях, чтобы форма не стала справочником
+     * почтовых адресов пользователей.
+     */
+    public record PasswordResetRequestedDto(String emailHint, long expiresInMinutes) {}
 
     public static AuthResponse authenticated(long expiresIn, UserDto user) {
         return new AuthResponse(Status.AUTHENTICATED, expiresIn, user, null);

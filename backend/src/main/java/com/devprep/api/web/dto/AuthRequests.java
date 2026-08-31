@@ -14,7 +14,10 @@ public record AuthRequests() {
             @NotBlank @Size(min = 10, max = 128) String password,
             @NotBlank @Size(max = 128) String displayName) {}
 
-    /** Второй шаг входа: 6-значный код из приложения-аутентификатора. */
+    /**
+     * Второй шаг входа: 6-значный код из приложения-аутентификатора. Резервные коды больше не
+     * принимаются: потерянный второй фактор восстанавливается кодом из письма.
+     */
     public record TotpVerify(
             @NotBlank @Pattern(regexp = "\\d{6}", message = "Нужен 6-значный код") String code) {}
 
@@ -24,11 +27,10 @@ public record AuthRequests() {
             @NotBlank @Size(min = 10, max = 128) String newPassword) {}
 
     /**
-     * Шаг 1 восстановления доступа: адрес, на который должен уйти код. Сервер не подтверждает и не
-     * опровергает, что такой адрес существует.
+     * Шаг 1 восстановления доступа: пользователь сам вводит адрес. Код уйдёт только если
+     * адрес совпадёт с адресом учётки; ответ одинаковый в любом случае.
      */
-    public record PasswordResetRequest(
-            @Email @NotBlank @Size(max = 256) String email) {}
+    public record PasswordResetRequest(@Email @NotBlank @Size(max = 256) String email) {}
 
     /** Шаг 2 восстановления доступа: код из письма и новый пароль. */
     public record PasswordResetConfirm(
@@ -36,7 +38,7 @@ public record AuthRequests() {
             @NotBlank
                     @Pattern(
                             regexp = "[A-Za-z0-9]{4}[- ]?[A-Za-z0-9]{4}",
-                            message = "Нужен код из письма вида XXXX-XXXX")
+                            message = "Нужен код вида XXXX-XXXX")
                     String code,
             @NotBlank @Size(min = 10, max = 128) String newPassword) {}
 }
