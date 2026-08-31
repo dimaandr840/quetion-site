@@ -1,5 +1,6 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { CookieConsent } from "@/components/layout/CookieConsent";
 import { ScrollProgress } from "@/components/layout/ScrollProgress";
 import { fetchCategories, fetchQuestions } from "@/lib/content-api";
 import { popularTags, topicPills } from "@/lib/queries";
@@ -26,6 +27,8 @@ export default async function PublicLayout({
       <ScrollProgress />
       <main id="main-content">{children}</main>
       <Footer />
+      {/* Баннер только в публичной части: в админке cookie строго служебные. */}
+      <CookieConsent />
     </div>
   );
 }

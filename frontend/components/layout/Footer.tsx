@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FOOTER_TAGLINE } from "@/lib/content";
 import { footerColumns } from "@/lib/nav";
+import { CookieSettingsButton } from "./CookieSettingsButton";
 import { Icon } from "../ui/Icon";
 import styles from "./Footer.module.css";
 
@@ -50,6 +51,20 @@ export function Footer() {
 
         <div className={styles.bottom}>
           <p className={styles.copyright}>© {year} DevPrep. Все права защищены.</p>
+
+          {/* Ссылка на политику обязана быть на каждой странице (ч. 2 ст. 18.1
+              152-ФЗ), рядом — возможность отозвать согласие на cookie. */}
+          <ul className={styles.legal}>
+            <li>
+              <Link href="/privacy" className={styles.legalLink}>
+                Политика обработки персональных данных
+              </Link>
+            </li>
+            <li>
+              <CookieSettingsButton className={styles.legalLink} />
+            </li>
+          </ul>
+
           <ul className={styles.socials}>
             {CONTACTS.map((contact) => (
               <li key={contact.name}>
