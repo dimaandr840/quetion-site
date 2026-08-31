@@ -11,7 +11,8 @@ import {
   type AuthResponse,
   type TotpSetup,
 } from "@/lib/auth";
-import styles from "@/app/login/page.module.css";
+import { ADMIN_PASSWORD_RESET_PATH, ADMIN_PATH } from "@/lib/routes";
+import styles from "@/app/admin/login/page.module.css";
 
 type Step = "credentials" | "totp";
 
@@ -36,7 +37,7 @@ export function LoginView() {
       // и не «//host», который браузер трактует как внешний адрес.
       const safeNext =
         next && next.startsWith("/") && !next.startsWith("//") ? next : null;
-      router.replace(safeNext ?? (isAdmin ? "/admin" : "/"));
+      router.replace(safeNext ?? (isAdmin ? ADMIN_PATH : "/"));
       router.refresh();
       return;
     }
@@ -173,7 +174,7 @@ export function LoginView() {
                 {pending ? "Проверяем..." : "Войти"}
               </button>
 
-              <Link href="/login/reset" className={styles.link}>
+              <Link href={ADMIN_PASSWORD_RESET_PATH} className={styles.link}>
                 Забыли пароль или потеряли телефон?
               </Link>
 
@@ -258,7 +259,7 @@ export function LoginView() {
                 {pending ? "Проверяем..." : "Подтвердить"}
               </button>
 
-              <Link href="/login/reset" className={styles.link}>
+              <Link href={ADMIN_PASSWORD_RESET_PATH} className={styles.link}>
                 Нет доступа к приложению? Восстановить доступ по почте
               </Link>
 

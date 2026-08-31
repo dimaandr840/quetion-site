@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_ENABLED } from "@/lib/flags";
+import { ADMIN_LOGIN_PATH, ADMIN_PATH, PATHNAME_HEADER } from "@/lib/routes";
 import { themeInitScript } from "@/lib/theme";
 
 /**
@@ -11,8 +12,8 @@ import { themeInitScript } from "@/lib/theme";
  * читаемая и не является токеном — подделать её можно, но это даёт лишь
  * доступ к пустой оболочке админки, любые данные API вернёт 401/403.
  *
- * Второе назначение файла — Content-Security-Policy с nonce для /admin и /login
- * (включая /login/reset — восстановление доступа по почте).
+ * Второе назначение файла — Content-Security-Policy с nonce для всего /admin,
+ * включая форму входа /admin/login и восстановление /admin/login/reset.
  * Nonce нельзя выдать из nginx (там нет генератора на запрос), поэтому эти
  * маршруты получают CSP отсюда, а публичные страницы — из nginx (и остаются
  * статическими: расширение matcher сделало бы динамическим весь сайт).
@@ -37,7 +38,7 @@ const MEDIA_ORIGIN = (() => {
 
 /**
  * Заголовки безопасности для закрытой части. Они важны именно здесь:
- * редиректы на /login формирует этот файл, и ответ минует часть цепочки настроек.
+ * редиректы на форму входа формирует этот файл, и ответ минует часть цепочки настроек.
  * Страницы админки не должны попадать ни в кэш прокси, ни в индекс поисковиков,
  * ни в историю браузера после выхода.
  */
@@ -122,12 +123,17 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const csp = buildCsp(createNonce(), await getThemeScriptHash());
 
+  // /admin/login и /admin/login/reset — единственные адреса внутри /admin,
+  // которые доступны без сессии: иначе редирект зациклится сам на себя.
+  const isAuthRoute =
+    pathname === ADMIN_LOGIN_PATH || pathname.startsWith(`${ADMIN_LOGIN_PATH}/`);
+
   if (AUTH_ENABLED) {
     const hint = request.cookies.get(SESSION_HINT_COOKIE)?.value;
 
-    if (pathname.startsWith("/admin") && hint !== "admin") {
+    if (!isAuthRoute && pathname.startsWith(ADMIN_PATH) && hint !== "admin") {
       const url = request.nextUrl.clone();
-      url.pathname = "/login";
+      url.pathname = ADMIN_LOGIN_PATH;
       url.search = `?next=${encodeURIComponent(pathname + search)}`;
       return applySecurityHeaders(NextResponse.redirect(url), csp);
     }
@@ -135,9 +141,9 @@ export async function proxy(request: NextRequest) {
     // Залогиненного админа со страницы входа отправляем в админку.
     // Страница восстановления сознательно не редиректится: сброс может
     // потребоваться и при живой сессии в другом браузере.
-    if (pathname === "/login" && hint === "admin") {
+    if (pathname === ADMIN_LOGIN_PATH && hint === "admin") {
       const url = request.nextUrl.clone();
-      url.pathname = "/admin";
+      url.pathname = ADMIN_PATH;
       url.search = "";
       return applySecurityHeaders(NextResponse.redirect(url), csp);
     }
@@ -146,10 +152,13 @@ export async function proxy(request: NextRequest) {
   // Заголовок нужен и на запросе (оттуда рендерер берёт nonce), и на ответе.
   const headers = new Headers(request.headers);
   headers.set(CSP_HEADER, csp);
+  // Путь нужен layout’у админки, чтобы не оборачивать форму входа в шапку и меню.
+  headers.set(PATHNAME_HEADER, pathname);
 
   return applySecurityHeaders(NextResponse.next({ request: { headers } }), csp);
 }
 
+// /login больше не существует — его нечего обрабатывать в matcher.
 export const config = {
-  matcher: ["/admin/:path*", "/login", "/login/:path*"],
+  matcher: ["/admin/:path*"],
 };

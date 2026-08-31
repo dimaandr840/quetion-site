@@ -1,0 +1,181 @@
+.wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-32) var(--space-16);
+  background: var(--page-bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-16);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-32);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-24);
+}
+
+.logo {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-8);
+  background: var(--accent);
+  color: var(--text-inverse);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.brandName {
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: var(--space-8);
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: var(--space-24);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.input {
+  height: 44px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-8);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.code {
+  font-family: var(--font-jetbrains-mono), monospace;
+  letter-spacing: 0.4em;
+  text-align: center;
+  font-size: 20px;
+}
+
+.submit {
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  border: 1px solid var(--error-main);
+  background: var(--error-light);
+  color: var(--error-text);
+  border-radius: var(--radius-8);
+  padding: var(--space-12);
+  font-size: 14px;
+}
+
+.secretBox {
+  border: 1px solid var(--accent-soft-border);
+  background: var(--accent-soft);
+  border-radius: var(--radius-8);
+  padding: var(--space-16);
+  margin-bottom: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+/* Белая подложка под QR: на тёмной теме код иначе не читается камерой. */
+.qrWrap {
+  display: flex;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: var(--radius-8);
+  padding: var(--space-12);
+}
+
+.secretLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.secretValue {
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-all;
+  user-select: all;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

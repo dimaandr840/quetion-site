@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
 import { confirmPasswordReset, requestPasswordReset } from "@/lib/auth";
-import styles from "@/app/login/page.module.css";
+import { ADMIN_LOGIN_PATH } from "@/lib/routes";
+import styles from "@/app/admin/login/page.module.css";
 
 type Step = "request" | "confirm" | "done";
 
@@ -140,7 +141,7 @@ export function PasswordResetView() {
                 {pending ? "Отправляем..." : "Получить код"}
               </button>
 
-              <Link href="/login" className={styles.link}>
+              <Link href={ADMIN_LOGIN_PATH} className={styles.link}>
                 Вернуться к входу
               </Link>
             </form>
@@ -251,7 +252,7 @@ export function PasswordResetView() {
               аккаунта включена двухфакторная защита, приложение-аутентификатор
               потребуется настроить заново.
             </p>
-            <Link href="/login" className={styles.link}>
+            <Link href={ADMIN_LOGIN_PATH} className={styles.link}>
               Перейти к входу
             </Link>
           </>
