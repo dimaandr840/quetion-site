@@ -95,6 +95,27 @@
   color: var(--text-muted);
 }
 
+.legal {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+}
+
+.legalLink {
+  font-size: 13px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.legalLink:hover {
+  color: var(--accent);
+}
+
 .socials {
   display: flex;
   align-items: center;
