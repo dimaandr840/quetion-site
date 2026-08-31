@@ -1,0 +1,35 @@
+/*
+ * Выравнивание сделано через text-align, а не float: картинка всегда занимает
+ * отдельную строку, как в Word. Обтекание текстом потребовало бы float с ручным
+ * сбросом на узких экранах и ломало бы порядок чтения.
+ */
+
+.left {
+  text-align: left;
+}
+
+.center {
+  text-align: center;
+}
+
+.right {
+  text-align: right;
+}
+
+.figure {
+  margin: var(--space-24) 0;
+}
+
+.image {
+  max-width: 100%;
+  /* Атрибуты width/height задают пропорции, чтобы вёрстка не прыгала при загрузке. */
+  height: auto;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-12);
+}
+
+.caption {
+  margin-top: var(--space-8);
+  font-size: 14px;
+  color: var(--text-muted);
+}

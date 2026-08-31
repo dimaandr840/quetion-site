@@ -6,9 +6,35 @@ export interface CodeSample {
   lines: string[];
 }
 
+/** Выравнивание блока ответа. */
+export type BlockAlign = "LEFT" | "CENTER" | "RIGHT";
+
+/**
+ * Блок ответа: абзац или картинка, стоящая между абзацами.
+ *
+ * `url` приходит от бэкенда и зависит от настроенного домена хранилища; на запись уходит только `storageKey`.
+ */
+export interface AnswerBlock {
+  kind: "PARAGRAPH" | "IMAGE";
+  align?: BlockAlign;
+  text?: string;
+  storageKey?: string;
+  url?: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
 export interface AnswerSection {
   id: string;
   heading: string;
+  /** Тело секции из API: абзацы и картинки в авторском порядке. */
+  blocks?: AnswerBlock[];
+  /**
+   * Плоские абзацы — только для seed-контента в lib/content.ts, откуда собирается
+   * seed/content.json. API их больше не отдаёт: бэкенд разворачивает их в блоки при импорте.
+   */
   paragraphs?: string[];
   bullets?: string[];
   code?: CodeSample;
@@ -25,9 +51,8 @@ export interface PracticeTask {
 /**
  * Картинка вопроса.
  *
- * `storageKey` — ключ объекта в хранилище и единственное, что отправляется на запись;
- * `url` всегда приходит от бэкенда и зависит от того, какой домен настроен в момент запроса.
- * `width`/`height` нужны next/image, чтобы вёрстка не прыгала при загрузке.
+ * С переходом на блоки картинки живут внутри текста ответа; этот тип остаётся для
+ * справочного списка файлов, который бэкенд отдаёт вместе с вопросом.
  */
 export interface QuestionImage {
   storageKey: string;
@@ -40,7 +65,7 @@ export interface QuestionImage {
 
 /**
  * Вопрос в списках: то, что отдаёт QuestionSummaryDto. Без тела ответа.
- * `path` («Профессия > Специализация > Тема») считает бэкенд.
+ * path («Профессия > Специализация > Тема») считает бэкенд.
  */
 export interface QuestionSummary {
   slug: string;
