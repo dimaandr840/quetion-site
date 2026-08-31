@@ -52,12 +52,15 @@ public class AnswerSection extends Auditable {
     @ToString.Exclude
     private Question question;
 
+    /**
+     * Тело секции: абзацы и картинки в том порядке, в котором их расставил автор. Пришло на смену
+     * списку строк — иначе картинку нельзя было поставить между конкретными абзацами.
+     */
     @ElementCollection(fetch = FetchType.LAZY)
-    @CollectionTable(name = "answer_section_paragraph", joinColumns = @JoinColumn(name = "section_id"))
-    @Column(name = "paragraph", nullable = false, columnDefinition = "text")
+    @CollectionTable(name = "answer_section_block", joinColumns = @JoinColumn(name = "section_id"))
     @OrderColumn(name = "position")
     @Builder.Default
-    private List<String> paragraphs = new ArrayList<>();
+    private List<AnswerBlock> blocks = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "answer_section_bullet", joinColumns = @JoinColumn(name = "section_id"))

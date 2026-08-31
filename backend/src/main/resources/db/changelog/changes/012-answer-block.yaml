@@ -1,0 +1,100 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-answer-block
+      author: devprep
+      changes:
+        # Тело секции ответа: абзацы и картинки одним упорядоченным списком.
+        # Плоский список абзацев (answer_section_paragraph) не мог хранить ни позицию
+        # картинки внутри ответа, ни выравнивание, поэтому заменяется целиком.
+        - createTable:
+            tableName: answer_section_block
+            columns:
+              - column:
+                  name: section_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: kind
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: align
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+              # Текст абзаца; у картинки пусто.
+              - column:
+                  name: body
+                  type: text
+              # Ключ объекта в хранилище; у абзаца пусто.
+              - column:
+                  name: storage_key
+                  type: varchar(200)
+              - column:
+                  name: alt
+                  type: varchar(300)
+              - column:
+                  name: caption
+                  type: varchar(500)
+              - column:
+                  name: width
+                  type: int
+              - column:
+                  name: height
+                  type: int
+        - addPrimaryKey:
+            tableName: answer_section_block
+            columnNames: section_id, position
+            constraintName: pk_answer_section_block
+        - addForeignKeyConstraint:
+            baseTableName: answer_section_block
+            baseColumnNames: section_id
+            constraintName: fk_answer_section_block_section
+            referencedTableName: answer_section
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # Перенос существующих ответов: каждый абзац становится блоком с выравниванием
+        # по левому краю, порядок сохраняется как был.
+        - sql:
+            splitStatements: false
+            sql: >
+              INSERT INTO answer_section_block (section_id, position, kind, align, body)
+              SELECT section_id, position, 'PARAGRAPH', 'LEFT', paragraph
+              FROM answer_section_paragraph
+        - dropTable:
+            tableName: answer_section_paragraph
+      rollback:
+        - createTable:
+            tableName: answer_section_paragraph
+            columns:
+              - column:
+                  name: section_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: paragraph
+                  type: text
+                  constraints:
+                    nullable: false
+        - sql:
+            splitStatements: false
+            sql: >
+              INSERT INTO answer_section_paragraph (section_id, position, paragraph)
+              SELECT section_id, position, body
+              FROM answer_section_block
+              WHERE kind = 'PARAGRAPH'
+        - dropTable:
+            tableName: answer_section_block
