@@ -39,6 +39,7 @@ export default async function HomePage() {
     ]);
 
   const tags = popularTags(allQuestions);
+  // Блок «Темы» с главной убран, но счётчик тем остаётся в полосе цифр.
   const topics = topicPills(categories);
   const deck = popular.slice(0, 3);
 
@@ -179,25 +180,6 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
-
-      {topics.length > 0 && (
-        <section className={`shell ${styles.section}`}>
-          <div className={`reveal ${styles.sectionHead}`}>
-            <h2 className={`h2 ${styles.sectionTitle}`}>Темы</h2>
-            <span className={styles.sectionHint}>
-              Прокрутите, чтобы увидеть все
-            </span>
-          </div>
-          {/* Длинная «стена пилюль» → горизонтальный rail со scroll-snap. */}
-          <div className="rail">
-            {topics.map((topic) => (
-              <Pill key={topic.href} href={topic.href}>
-                {topic.title} · {topic.count}
-              </Pill>
-            ))}
-          </div>
-        </section>
-      )}
     </>
   );
 }
