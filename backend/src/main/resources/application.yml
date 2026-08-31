@@ -37,6 +37,12 @@ spring:
     default-property-inclusion: non_null
     serialization:
       write-dates-as-timestamps: false
+  servlet:
+    multipart:
+      # Первый барьер для загрузки: Tomcat обрывает запрос, не доводя файл до кода.
+      # Держать согласованным с devprep.media.max-file-size и client_max_body_size в nginx.
+      max-file-size: ${MEDIA_MAX_FILE_SIZE:5MB}
+      max-request-size: ${MEDIA_MAX_REQUEST_SIZE:6MB}
   threads:
     virtual:
       enabled: true
@@ -46,6 +52,21 @@ devprep:
     enabled: ${SEED_ENABLED:true}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  media:
+    # Хранилище картинок. Выключено по умолчанию: без ключей R2 сервис поднимается
+    # как раньше, просто загрузка отвечает 503. См. docs/media.md.
+    enabled: ${MEDIA_ENABLED:false}
+    endpoint: ${S3_ENDPOINT:}
+    bucket: ${S3_BUCKET:}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    region: ${S3_REGION:auto}
+    # Домен, с которого картинки отдаются читателям: r2.dev, свой поддомен или CDN.
+    # Он же должен быть в images.remotePatterns и в img-src CSP на фронтенде.
+    public-base-url: ${MEDIA_PUBLIC_BASE_URL:}
+    key-prefix: ${MEDIA_KEY_PREFIX:questions}
+    max-file-size: ${MEDIA_MAX_FILE_SIZE:5MB}
+    max-dimension: ${MEDIA_MAX_DIMENSION:1600}
   jwt:
     # Обязательно задать через переменную окружения. Дефолта в репозитории нет намеренно.
     secret: ${JWT_SECRET}
