@@ -10,6 +10,22 @@ export interface AnswerSectionPayload {
   code?: { language: string; title: string; lines: string[] };
 }
 
+/**
+ * Картинка вопроса в запросе апсерта.
+ *
+ * На запись уходит только `storageKey` — ключ объекта, выданный
+ * POST /api/admin/media. Поле `url` бэкенд игнорирует и всегда пересчитывает
+ * сам, поэтому подменить домен через форму нельзя.
+ */
+export interface QuestionImagePayload {
+  storageKey: string;
+  url?: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
 export interface QuestionUpsertPayload {
   slug: string;
   title: string;
@@ -22,6 +38,7 @@ export interface QuestionUpsertPayload {
   popular: boolean;
   published: boolean;
   sections: AnswerSectionPayload[];
+  images: QuestionImagePayload[];
 }
 
 /** Строка админской таблицы, как её отдаёт GET /api/admin/questions. */
@@ -48,6 +65,8 @@ export interface AdminQuestionDetailDto {
   popular: boolean;
   published?: boolean;
   sections: AnswerSectionPayload[];
+  /** Отсутствует, если у вопроса нет картинок: бэкенд не отдаёт пустые поля. */
+  images?: QuestionImagePayload[];
 }
 
 /** Заголовок по умолчанию, если админ не выделил в ответе ни одного H1/H2. */
@@ -301,6 +320,7 @@ export function buildQuestionPayload(input: {
   tags: string;
   answerHtml: string;
   published: boolean;
+  images?: QuestionImagePayload[];
   slug?: string;
 }): QuestionUpsertPayload {
   const sections = parseAnswerHtml(input.answerHtml);
@@ -327,6 +347,14 @@ export function buildQuestionPayload(input: {
     popular: false,
     published: input.published,
     sections,
+    // Отправляем только ключ и подписи: url бэкенд собирает сам.
+    images: (input.images ?? []).map((image) => ({
+      storageKey: image.storageKey,
+      alt: image.alt.trim(),
+      caption: image.caption?.trim() ? image.caption.trim() : undefined,
+      width: image.width,
+      height: image.height,
+    })),
   };
 }
 
