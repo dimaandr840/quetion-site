@@ -1,22 +1,35 @@
 import { apiFetch } from "./api";
 import { sanitizeInlineHtml, stripInlineHtml } from "./inline-html";
-import type { Level } from "./types";
+import type { BlockAlign, Level } from "./types";
+
+/**
+ * Блок ответа в запросе апсерта.
+ *
+ * У картинки на запись уходит только `storageKey` — ключ объекта, выданный
+ * POST /api/admin/media. Поле `url` бэкенд игнорирует и всегда пересчитывает сам,
+ * поэтому подменить домен через форму нельзя.
+ */
+export interface AnswerBlockPayload {
+  kind: "PARAGRAPH" | "IMAGE";
+  align?: BlockAlign;
+  text?: string;
+  storageKey?: string;
+  url?: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
 
 export interface AnswerSectionPayload {
   id?: string;
   heading?: string;
-  paragraphs?: string[];
+  blocks?: AnswerBlockPayload[];
   bullets?: string[];
   code?: { language: string; title: string; lines: string[] };
 }
 
-/**
- * Картинка вопроса в запросе апсерта.
- *
- * На запись уходит только `storageKey` — ключ объекта, выданный
- * POST /api/admin/media. Поле `url` бэкенд игнорирует и всегда пересчитывает
- * сам, поэтому подменить домен через форму нельзя.
- */
+/** Картинка вопроса, как её отдаёт бэкенд справочным списком. */
 export interface QuestionImagePayload {
   storageKey: string;
   url?: string;
@@ -38,7 +51,6 @@ export interface QuestionUpsertPayload {
   popular: boolean;
   published: boolean;
   sections: AnswerSectionPayload[];
-  images: QuestionImagePayload[];
 }
 
 /** Строка админской таблицы, как её отдаёт GET /api/admin/questions. */
@@ -108,6 +120,17 @@ function inlineOf(element: Element): string {
   return stripInlineHtml(html) ? html : "";
 }
 
+/**
+ * Выравнивание блока. contenteditable по командам justifyCenter/justifyRight
+ * ставит именно inline-стиль text-align, поэтому читаем его, а не классы.
+ */
+function alignOf(element: Element): BlockAlign {
+  const raw = (element as HTMLElement).style?.textAlign ?? "";
+  if (raw === "center") return "CENTER";
+  if (raw === "right") return "RIGHT";
+  return "LEFT";
+}
+
 /** Теги, которые начинают новый блок. Всё остальное считается инлайновым. */
 const BLOCK_TAGS = new Set([
   "h1", "h2", "h3", "h4", "p", "div", "ul", "ol", "pre", "blockquote",
@@ -171,8 +194,8 @@ function splitByBreaks(element: Element): string[] {
 
 /**
  * Разбирает HTML из contenteditable-редактора в секции ответа.
- * Каждый h1/h2 начинает новую секцию; абзацы, списки и блоки кода
- * попадают в текущую.
+ * Каждый h1/h2 начинает новую секцию; абзацы, картинки, списки и блоки кода
+ * попадают в текущую. Порядок абзацев и картинок сохраняется.
  */
 export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
   const root = document.createElement("div");
@@ -190,12 +213,18 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
       current = {
         id: `section-${index}`,
         heading,
-        paragraphs: [],
+        blocks: [],
         bullets: [],
       };
       sections.push(current);
     }
     return current;
+  }
+
+  function pushParagraphs(section: AnswerSectionPayload, lines: string[], align: BlockAlign) {
+    for (const line of lines) {
+      section.blocks?.push({ kind: "PARAGRAPH", align, text: line });
+    }
   }
 
   /**
@@ -215,10 +244,7 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
       inline = [];
       const lines = splitByBreaks(holder);
       if (lines.length === 0) return;
-      const section = ensure();
-      for (const line of lines) {
-        section.paragraphs?.push(line);
-      }
+      pushParagraphs(ensure(), lines, "LEFT");
     }
 
     for (const node of nodes) {
@@ -237,6 +263,33 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
 
       if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4") {
         ensure(textOf(element) || undefined);
+        continue;
+      }
+
+      // Картинка вставлена редактором: всё нужное лежит в data-атрибутах, а не в src:
+      // адрес зависит от домена хранилища и на запись не уходит.
+      if (tag === "figure" && element.getAttribute("data-image") === "1") {
+        const storageKey = element.getAttribute("data-storage-key") ?? "";
+        const image = element.querySelector("img");
+        const alt = element.getAttribute("data-alt") || image?.getAttribute("alt") || "";
+        if (!storageKey || !alt.trim()) {
+          // Без ключа или alt бэкенд всё равно ответит ошибкой.
+          continue;
+        }
+        const captionNode = element.querySelector("figcaption");
+        const caption = (captionNode?.textContent ?? element.getAttribute("data-caption") ?? "").trim();
+        const width = Number(element.getAttribute("data-width")) || undefined;
+        const height = Number(element.getAttribute("data-height")) || undefined;
+
+        ensure().blocks?.push({
+          kind: "IMAGE",
+          align: alignOf(element),
+          storageKey,
+          alt: alt.trim(),
+          caption: caption || undefined,
+          width,
+          height,
+        });
         continue;
       }
 
@@ -263,10 +316,7 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
       if (tag === "blockquote") {
         const lines = splitByBreaks(element);
         if (lines.length === 0) continue;
-        const section = ensure();
-        for (const line of lines) {
-          section.paragraphs?.push(line);
-        }
+        pushParagraphs(ensure(), lines, alignOf(element));
         continue;
       }
 
@@ -277,10 +327,7 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
 
       const lines = splitByBreaks(element);
       if (lines.length === 0) continue;
-      const section = ensure();
-      for (const line of lines) {
-        section.paragraphs?.push(line);
-      }
+      pushParagraphs(ensure(), lines, alignOf(element));
     }
 
     flushInline();
@@ -293,7 +340,7 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
     // Бэкенд требует непустой заголовок секции (@NotBlank), а ответ без H1/H2
     // — обычный случай. Подставляем нейтральный заголовок вместо ошибки 400.
     heading: section.heading?.trim() ? section.heading.trim() : DEFAULT_SECTION_HEADING,
-    paragraphs: section.paragraphs?.length ? section.paragraphs : undefined,
+    blocks: section.blocks?.length ? section.blocks : undefined,
     bullets: section.bullets?.length ? section.bullets : undefined,
   }));
 }
@@ -302,7 +349,10 @@ function plainText(sections: AnswerSectionPayload[]): string {
   return sections
     .flatMap((section) => [
       section.heading ?? "",
-      ...(section.paragraphs ?? []),
+      // Подписи и alt картинок тоже текст: они осмысленны в поиске.
+      ...(section.blocks ?? []).map((block) =>
+        block.kind === "IMAGE" ? block.caption || block.alt || "" : block.text ?? ""
+      ),
       ...(section.bullets ?? []),
     ])
     .filter(Boolean)
@@ -310,6 +360,16 @@ function plainText(sections: AnswerSectionPayload[]): string {
     .map(stripInlineHtml)
     .join(" ")
     .trim();
+}
+
+/** Первый текстовый абзац ответа: картинка в качестве краткой сути бесполезна. */
+function firstParagraph(sections: AnswerSectionPayload[]): string {
+  for (const section of sections) {
+    for (const block of section.blocks ?? []) {
+      if (block.kind === "PARAGRAPH" && block.text) return block.text;
+    }
+  }
+  return "";
 }
 
 export function buildQuestionPayload(input: {
@@ -320,7 +380,6 @@ export function buildQuestionPayload(input: {
   tags: string;
   answerHtml: string;
   published: boolean;
-  images?: QuestionImagePayload[];
   slug?: string;
 }): QuestionUpsertPayload {
   const sections = parseAnswerHtml(input.answerHtml);
@@ -341,21 +400,19 @@ export function buildQuestionPayload(input: {
     // из текста ответа, как это делает сид базы знаний.
     snippet: flat.slice(0, 1024) || input.title.trim(),
     tldr:
-      stripInlineHtml(sections[0]?.paragraphs?.[0] ?? "") ||
+      stripInlineHtml(firstParagraph(sections)) ||
       flat.slice(0, 512) ||
       input.title.trim(),
     popular: false,
     published: input.published,
     sections,
-    // Отправляем только ключ и подписи: url бэкенд собирает сам.
-    images: (input.images ?? []).map((image) => ({
-      storageKey: image.storageKey,
-      alt: image.alt.trim(),
-      caption: image.caption?.trim() ? image.caption.trim() : undefined,
-      width: image.width,
-      height: image.height,
-    })),
   };
+}
+
+function alignStyle(align?: BlockAlign): string {
+  if (align === "CENTER") return ' style="text-align:center"';
+  if (align === "RIGHT") return ' style="text-align:right"';
+  return "";
 }
 
 /**
@@ -370,8 +427,12 @@ export function sectionsToHtml(sections: AnswerSectionPayload[]): string {
     if (section.heading) {
       parts.push(`<h2>${escapeHtml(section.heading)}</h2>`);
     }
-    for (const paragraph of section.paragraphs ?? []) {
-      parts.push(`<p>${sanitizeInlineHtml(paragraph)}</p>`);
+    for (const block of section.blocks ?? []) {
+      if (block.kind === "IMAGE") {
+        parts.push(imageToHtml(block));
+        continue;
+      }
+      parts.push(`<p${alignStyle(block.align)}>${sanitizeInlineHtml(block.text ?? "")}</p>`);
     }
     const bullets = section.bullets ?? [];
     if (bullets.length > 0) {
@@ -385,6 +446,31 @@ export function sectionsToHtml(sections: AnswerSectionPayload[]): string {
   }
 
   return parts.join("");
+}
+
+/**
+ * Разметка картинки в редакторе. Сама <figure> не редактируется (contenteditable=false):
+ * иначе курсор заходит внутрь и ломает data-атрибуты, по которым собирается блок.
+ */
+export function imageToHtml(block: AnswerBlockPayload): string {
+  const attributes = [
+    'data-image="1"',
+    `data-storage-key="${escapeHtml(block.storageKey ?? "")}"`,
+    `data-alt="${escapeHtml(block.alt ?? "")}"`,
+  ];
+  if (block.caption) attributes.push(`data-caption="${escapeHtml(block.caption)}"`);
+  if (block.width) attributes.push(`data-width="${block.width}"`);
+  if (block.height) attributes.push(`data-height="${block.height}"`);
+
+  const caption = block.caption
+    ? `<figcaption>${escapeHtml(block.caption)}</figcaption>`
+    : "";
+
+  return (
+    `<figure ${attributes.join(" ")} contenteditable="false"${alignStyle(block.align)}>` +
+    `<img src="${escapeHtml(block.url ?? "")}" alt="${escapeHtml(block.alt ?? "")}" />` +
+    `${caption}</figure>`
+  );
 }
 
 function escapeHtml(value: string): string {
