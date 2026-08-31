@@ -170,6 +170,10 @@ export function LoginView() {
                 {pending ? "Проверяем..." : "Войти"}
               </button>
 
+              <Link href="/login/reset" className={styles.link}>
+                Забыли пароль или потеряли телефон?
+              </Link>
+
               <Link href="/" className={styles.link}>
                 Вернуться на сайт
               </Link>
@@ -230,6 +234,10 @@ export function LoginView() {
               >
                 {pending ? "Проверяем..." : "Подтвердить"}
               </button>
+
+              <Link href="/login/reset" className={styles.link}>
+                Нет доступа к приложению? Восстановить доступ по почте
+              </Link>
 
               <button
                 type="button"
