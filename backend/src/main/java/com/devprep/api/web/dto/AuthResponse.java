@@ -2,7 +2,6 @@ package com.devprep.api.web.dto;
 
 import com.devprep.api.domain.Role;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -24,12 +23,13 @@ public record AuthResponse(Status status, long expiresIn, UserDto user, TotpSetu
     public record UserDto(String email, String displayName, Set<Role> roles) {}
 
     /**
-     * Счётчик резервных кодов. Сами коды здесь не отдаются: в БД хранятся только хеши.
+     * Ответ на запрос кода восстановления доступа.
+     *
+     * <p>{@code emailHint} — маска адреса, который ввёл сам пользователь ({@code d****@g****.com}).
+     * Полный адрес учётки наружу не отдаётся никогда, а одинаковый ответ для существующего и
+     * несуществующего адреса не позволяет перечислять учётки.
      */
-    public record BackupCodesStatusDto(long remaining, long total, boolean lowOnCodes) {}
-
-    /** Новый набор резервных кодов. Показывается ровно один раз. */
-    public record BackupCodesDto(List<String> codes) {}
+    public record PasswordResetRequestedDto(String emailHint, long expiresInMinutes) {}
 
     /** Данные для первичной настройки 2FA. Отдаются один раз, до подтверждения кодом. */
     public record TotpSetupDto(String secret, String provisioningUri) {}

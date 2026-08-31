@@ -50,6 +50,15 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!--
+      Отправка письма с кодом восстановления доступа. SMTP настраивается
+      переменными окружения (SMTP_HOST и далее); если хост не задан,
+      сброс пароля просто не рассылает письма и пишет ошибку в лог.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.liquibase</groupId>
