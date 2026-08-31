@@ -9,10 +9,12 @@ import {
   sectionsToHtml,
   updateQuestion,
   type AdminQuestionDetailDto,
+  type QuestionImagePayload,
 } from "@/lib/admin-api";
 import { normalizeLinkHref } from "@/lib/inline-html";
 import { LEVELS } from "@/lib/queries";
 import type { Level } from "@/lib/types";
+import QuestionImagesField from "./QuestionImagesField";
 import styles from "./QuestionFormModal.module.css";
 
 export interface QuestionFormOption {
@@ -61,8 +63,9 @@ interface ToolbarButton {
 /**
  * Панель форматирования. Каждая кнопка обязана что-то делать: набор ограничен
  * тем, что умеет сохранить parseAnswerHtml и показать публичная страница вопроса.
- * Поэтому здесь нет изображений и таблиц — для них нет ни хранилища, ни модели
- * данных, и разметка молча терялась бы при сохранении.
+ * Картинок и таблиц здесь нет: таблицы некуда сохранить, а картинки живут не в
+ * разметке ответа, а отдельным списком внизу формы — так у них есть alt,
+ * подпись и порядок, а бэкенд может чистить файлы при отвязке.
  */
 const TOOLBAR_GROUPS: ToolbarButton[][] = [
   [
@@ -139,6 +142,7 @@ export function QuestionFormModal({
   );
   const [level, setLevel] = useState<Level>(initial?.level ?? "Middle");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
+  const [images, setImages] = useState<QuestionImagePayload[]>(initial?.images ?? []);
   const [publish, setPublish] = useState(initial ? initial.published !== false : true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +157,17 @@ export function QuestionFormModal({
 
   // HTML исходного ответа считаем один раз: он же служит эталоном для проверки изменений.
   const initialHtmlRef = useRef(initial ? sectionsToHtml(initial.sections ?? []) : "");
+  // Слепок картинок для той же проверки: сравниваем ключи и подписи, а не
+  // ссылки на объекты — иначе любой рендер считался бы правкой.
+  const initialImagesRef = useRef(
+    JSON.stringify(
+      (initial?.images ?? []).map((image) => [
+        image.storageKey,
+        image.alt,
+        image.caption ?? "",
+      ])
+    )
+  );
 
   // При смене направления ранее выбранная категория может стать
   // недоступной — подставляем первую доступную во время рендера,
@@ -170,6 +185,9 @@ export function QuestionFormModal({
    */
   function requestClose() {
     const editorText = (editorRef.current?.textContent ?? "").trim();
+    const imagesSnapshot = JSON.stringify(
+      images.map((image) => [image.storageKey, image.alt, image.caption ?? ""])
+    );
     const dirty = initial
       ? title.trim() !== (initial.title ?? "").trim() ||
         tags.trim() !== (initial.tags ?? []).join(", ").trim() ||
@@ -177,8 +195,12 @@ export function QuestionFormModal({
         level !== initial.level ||
         professionSlug !== initial.professionSlug ||
         effectiveCategorySlug !== initial.categorySlug ||
+        imagesSnapshot !== initialImagesRef.current ||
         publish !== (initial.published !== false)
-      : title.trim().length > 0 || tags.trim().length > 0 || editorText.length > 0;
+      : title.trim().length > 0 ||
+        tags.trim().length > 0 ||
+        images.length > 0 ||
+        editorText.length > 0;
 
     if (dirty && !window.confirm("Закрыть окно? Изменения не сохранятся.")) return;
     onClose();
@@ -421,6 +443,12 @@ export function QuestionFormModal({
       setError("Выберите направление и категорию.");
       return;
     }
+    // alt обязателен и на бэкенде (@NotBlank). Проверяем здесь, чтобы админ
+    // видел понятный текст вместо общей ошибки валидации 400.
+    if (images.some((image) => !image.alt.trim())) {
+      setError("У каждой картинки заполните альтернативный текст.");
+      return;
+    }
 
     setError(null);
     setPending(true);
@@ -433,6 +461,7 @@ export function QuestionFormModal({
         tags,
         answerHtml,
         published: publish,
+        images,
         slug: initial?.slug,
       });
 
@@ -642,6 +671,15 @@ export function QuestionFormModal({
                 value={tags}
                 onChange={(event) => setTags(event.target.value)}
                 placeholder="Например: HashMap, Garbage Collector, Memory..."
+              />
+            </div>
+
+            <div className={styles.group}>
+              <span className={styles.label}>Картинки к вопросу</span>
+              <QuestionImagesField
+                images={images}
+                onChange={setImages}
+                disabled={pending}
               />
             </div>
 

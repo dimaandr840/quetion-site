@@ -85,7 +85,14 @@ export async function apiFetch<T>(
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
 
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  // FormData исключён сознательно: его Content-Type содержит сгенерированный
+  // браузером boundary. Стоит выставить заголовок вручную — boundary потеряется,
+  // и сервер ответит непонятной ошибкой разбора multipart.
+  if (
+    init.body !== undefined &&
+    !headers.has("Content-Type") &&
+    !(typeof FormData !== "undefined" && init.body instanceof FormData)
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -115,4 +122,17 @@ export async function apiFetch<T>(
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+/**
+ * Загрузка файла через multipart/form-data.
+ *
+ * Отдельная функция, а не вызов apiFetch на месте: потребителям не нужно помнить
+ * про запрет на ручной Content-Type.
+ */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData
+): Promise<T> {
+  return apiFetch<T>(path, { method: "POST", body: formData });
 }

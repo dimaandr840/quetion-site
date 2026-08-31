@@ -7,6 +7,7 @@ import com.devprep.api.domain.Level;
 import com.devprep.api.domain.PracticeTask;
 import com.devprep.api.domain.Profession;
 import com.devprep.api.domain.Question;
+import com.devprep.api.domain.QuestionImage;
 import com.devprep.api.repository.CategoryRepository;
 import com.devprep.api.repository.ProfessionRepository;
 import com.devprep.api.repository.QuestionRepository;
@@ -16,6 +17,7 @@ import com.devprep.api.web.dto.AnswerSectionDto;
 import com.devprep.api.web.dto.CodeSampleDto;
 import com.devprep.api.web.dto.PracticeTaskDto;
 import com.devprep.api.web.dto.QuestionDetailDto;
+import com.devprep.api.web.dto.QuestionImageDto;
 import com.devprep.api.web.dto.QuestionUpsertRequest;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -23,6 +25,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -43,6 +47,7 @@ public class AdminQuestionService {
     private final ProfessionRepository professionRepository;
     private final CategoryRepository categoryRepository;
     private final ContentMapper mapper;
+    private final MediaService mediaService;
     private final Optional<MeilisearchService> meilisearch;
 
     public AdminQuestionService(
@@ -50,11 +55,13 @@ public class AdminQuestionService {
             ProfessionRepository professionRepository,
             CategoryRepository categoryRepository,
             ContentMapper mapper,
+            MediaService mediaService,
             Optional<MeilisearchService> meilisearch) {
         this.questionRepository = questionRepository;
         this.professionRepository = professionRepository;
         this.categoryRepository = categoryRepository;
         this.mapper = mapper;
+        this.mediaService = mediaService;
         this.meilisearch = meilisearch;
     }
 
@@ -93,7 +100,7 @@ public class AdminQuestionService {
         if (questionRepository.findBySlug(request.slug()).isPresent()) {
             throw new IllegalArgumentException("Вопрос с slug «" + request.slug() + "» уже существует");
         }
-        Question question = apply(new Question(), request);
+        Question question = apply(new Question(), request, new ArrayList<>());
         Question saved = questionRepository.save(question);
         recount(saved);
         reindex(saved);
@@ -108,12 +115,16 @@ public class AdminQuestionService {
                         .findWithAnswerBySlug(slug)
                         .orElseThrow(() -> ResourceNotFoundException.question(slug));
         String previousProfession = question.getProfession().getSlug();
-        Question saved = questionRepository.save(apply(question, request));
+        List<String> detachedImages = new ArrayList<>();
+        Question saved = questionRepository.save(apply(question, request, detachedImages));
         recount(saved);
         if (!previousProfession.equals(saved.getProfession().getSlug())) {
             professionRepository.findBySlug(previousProfession).ifPresent(this::recountProfession);
         }
         reindex(saved);
+        // Файлы удаляем после успешного сохранения: при откате транзакции вопрос остался бы
+        // ссылаться на объект, которого уже нет в бакете.
+        mediaService.deleteQuietly(detachedImages);
         return mapper.toDetail(saved, List.of(), null, null);
     }
 
@@ -124,14 +135,22 @@ public class AdminQuestionService {
                 questionRepository.findBySlug(slug).orElseThrow(() -> ResourceNotFoundException.question(slug));
         Profession profession = question.getProfession();
         Category category = question.getCategory();
+        List<String> orphanedImages =
+                question.getImages().stream().map(QuestionImage::getStorageKey).toList();
         questionRepository.delete(question);
         questionRepository.flush();
         recountProfession(profession);
         recountCategory(category);
         meilisearch.ifPresent(service -> service.deleteOne(slug));
+        mediaService.deleteQuietly(orphanedImages);
     }
 
-    private Question apply(Question question, QuestionUpsertRequest request) {
+    /**
+     * @param detachedImages сюда складываются ключи картинок, которые вопрос больше не использует —
+     *     вызывающий удалит их из хранилища после коммита.
+     */
+    private Question apply(
+            Question question, QuestionUpsertRequest request, List<String> detachedImages) {
         Profession profession =
                 professionRepository
                         .findBySlug(request.professionSlug())
@@ -167,7 +186,51 @@ public class AdminQuestionService {
                 question.addTask(toEntity(dto));
             }
         }
+
+        applyImages(question, request.images() == null ? List.of() : request.images(), detachedImages);
         return question;
+    }
+
+    /**
+     * Картинки пересобираются по ключу, а не пересоздаются: клиент присылает итоговый список, и
+     * пережившие правку записи сохраняют свои id, created_at и порядок из запроса.
+     */
+    private void applyImages(
+            Question question, List<QuestionImageDto> requested, List<String> detachedImages) {
+        Map<String, QuestionImage> existing =
+                question.getImages().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        QuestionImage::getStorageKey,
+                                        image -> image,
+                                        (first, second) -> first,
+                                        java.util.LinkedHashMap::new));
+        Set<String> keep = new LinkedHashSet<>();
+
+        List<QuestionImage> ordered = new ArrayList<>();
+        for (QuestionImageDto dto : requested) {
+            if (!keep.add(dto.storageKey())) {
+                // Один файл дважды в одном вопросе сломал бы уникальный индекс по storage_key.
+                continue;
+            }
+            QuestionImage image = existing.get(dto.storageKey());
+            if (image == null) {
+                image = new QuestionImage();
+                image.setStorageKey(dto.storageKey());
+            }
+            image.setAlt(dto.alt());
+            image.setCaption(dto.caption());
+            image.setWidth(dto.width());
+            image.setHeight(dto.height());
+            ordered.add(image);
+        }
+
+        existing.keySet().stream().filter(key -> !keep.contains(key)).forEach(detachedImages::add);
+
+        question.getImages().clear();
+        for (QuestionImage image : ordered) {
+            question.addImage(image);
+        }
     }
 
     private PracticeTask toEntity(PracticeTaskDto dto) {

@@ -100,6 +100,16 @@ public class Question extends Auditable {
     @Builder.Default
     private List<PracticeTask> tasks = new ArrayList<>();
 
+    /**
+     * Изображения вопроса. orphanRemoval снимает запись в базе, но не файл в хранилище — за это
+     * отвечает AdminQuestionService: он собирает отвязанные ключи и просит MediaService их удалить.
+     */
+    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderColumn(name = "position")
+    @ToString.Exclude
+    @Builder.Default
+    private List<QuestionImage> images = new ArrayList<>();
+
     public void addSection(AnswerSection section) {
         sections.add(section);
         section.setQuestion(this);
@@ -108,5 +118,10 @@ public class Question extends Auditable {
     public void addTask(PracticeTask task) {
         tasks.add(task);
         task.setQuestion(this);
+    }
+
+    public void addImage(QuestionImage image) {
+        images.add(image);
+        image.setQuestion(this);
     }
 }

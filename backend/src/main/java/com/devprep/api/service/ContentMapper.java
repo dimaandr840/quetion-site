@@ -8,6 +8,7 @@ import com.devprep.api.domain.Level;
 import com.devprep.api.domain.PracticeTask;
 import com.devprep.api.domain.Profession;
 import com.devprep.api.domain.Question;
+import com.devprep.api.domain.QuestionImage;
 import com.devprep.api.domain.Specialization;
 import com.devprep.api.web.dto.AnswerSectionDto;
 import com.devprep.api.web.dto.CategoryDto;
@@ -16,6 +17,7 @@ import com.devprep.api.web.dto.IndustryDto;
 import com.devprep.api.web.dto.PracticeTaskDto;
 import com.devprep.api.web.dto.ProfessionDto;
 import com.devprep.api.web.dto.QuestionDetailDto;
+import com.devprep.api.web.dto.QuestionImageDto;
 import com.devprep.api.web.dto.QuestionSummaryDto;
 import com.devprep.api.web.dto.SpecializationDto;
 import java.util.EnumMap;
@@ -25,6 +27,12 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ContentMapper {
+
+    private final MediaService mediaService;
+
+    public ContentMapper(MediaService mediaService) {
+        this.mediaService = mediaService;
+    }
 
     public IndustryDto toDto(Industry industry) {
         return new IndustryDto(
@@ -108,6 +116,9 @@ public class ContentMapper {
                 question.getTasks().isEmpty()
                         ? null
                         : question.getTasks().stream().map(this::toDto).toList(),
+                question.getImages().isEmpty()
+                        ? null
+                        : question.getImages().stream().map(this::toDto).toList(),
                 related,
                 previous,
                 next);
@@ -119,6 +130,20 @@ public class ContentMapper {
                 task.getTitle(),
                 List.copyOf(task.getStatement()),
                 task.getHint());
+    }
+
+    /**
+     * Публичный адрес собирается на чтении из {@code devprep.media.public-base-url}: смена домена
+     * или переезд за CDN не требует переписывать строки в базе.
+     */
+    public QuestionImageDto toDto(QuestionImage image) {
+        return new QuestionImageDto(
+                image.getStorageKey(),
+                mediaService.publicUrl(image.getStorageKey()),
+                image.getAlt(),
+                image.getCaption(),
+                image.getWidth(),
+                image.getHeight());
     }
 
     public AnswerSectionDto toDto(AnswerSection section) {

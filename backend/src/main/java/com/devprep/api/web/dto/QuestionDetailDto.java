@@ -19,6 +19,7 @@ public record QuestionDetailDto(
         String path,
         List<AnswerSectionDto> sections,
         List<PracticeTaskDto> tasks,
+        List<QuestionImageDto> images,
         List<QuestionSummaryDto> related,
         QuestionSummaryDto previous,
         QuestionSummaryDto next) {}

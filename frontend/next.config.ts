@@ -27,11 +27,41 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Домен объектного хранилища картинок. next/image по умолчанию отказывается
+ * оптимизировать внешние адреса — это защита от использования оптимизатора как открытого
+ * прокси, поэтому разрешаем ровно один хост из переменной окружения, а не шаблон «**».
+ * Переменная читается на сборке, поэтому в compose она передаётся и build arg‘ом.
+ */
+const mediaBaseUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
+const mediaHost = (() => {
+  if (!mediaBaseUrl) return null;
+  try {
+    return new URL(mediaBaseUrl);
+  } catch {
+    return null;
+  }
+})();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
   // Не рассказываем сканерам версию и стек в X-Powered-By.
   poweredByHeader: false,
+  images: {
+    // Исходники лежат в JPEG/PNG, а отдаём в современных форматах: конвертация
+    // в AVIF/WebP — работа next/image, бэкенд её не делает.
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: mediaHost
+      ? [
+          {
+            protocol: mediaHost.protocol.replace(":", "") as "http" | "https",
+            hostname: mediaHost.hostname,
+            pathname: "/**",
+          },
+        ]
+      : [],
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

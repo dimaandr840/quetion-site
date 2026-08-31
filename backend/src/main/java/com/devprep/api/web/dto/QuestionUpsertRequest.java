@@ -1,6 +1,7 @@
 package com.devprep.api.web.dto;
 
 import com.devprep.api.domain.Level;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,4 +20,6 @@ public record QuestionUpsertRequest(
         /** null трактуется как «опубликован» — совместимость с клиентами без этого поля. */
         Boolean published,
         @NotNull List<AnswerSectionDto> sections,
-        List<PracticeTaskDto> tasks) {}
+        List<PracticeTaskDto> tasks,
+        /** null и пустой список равнозначны: у вопроса не остаётся ни одной картинки. */
+        List<@Valid QuestionImageDto> images) {}
