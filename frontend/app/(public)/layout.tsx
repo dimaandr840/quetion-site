@@ -5,6 +5,17 @@ import { ScrollProgress } from "@/components/layout/ScrollProgress";
 import { fetchCategories, fetchQuestions } from "@/lib/content-api";
 import { popularTags, topicPills } from "@/lib/queries";
 
+/**
+ * На сборке (docker build) API недоступен: контейнер api ещё не запущен и сети
+ * compose у сборщика нет. Этот layout ходит в API ради подсказок поиска, то
+ * есть от него зависят все публичные страницы — включая полностью статическую
+ * /privacy, которая раньше падала на пререндере с ECONNREFUSED и обрывала
+ * сборку. Поэтому рендерим по запросу, как и остальные страницы с данными.
+ * Кеш при этом сохраняется: в serverFetch у fetch явно задан next.revalidate
+ * + тег content, так что база не получает запрос на каждый хит.
+ */
+export const dynamic = "force-dynamic";
+
 /** Сколько тем показывает поисковый оверлей. */
 const TOPIC_LIMIT = 5;
 
