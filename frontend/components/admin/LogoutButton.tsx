@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "../ui/Icon";
 import { logout } from "@/lib/auth";
+import { ADMIN_LOGIN_PATH } from "@/lib/routes";
 import styles from "./AdminHeader.module.css";
 
 export function LogoutButton() {
@@ -19,7 +20,7 @@ export function LogoutButton() {
       // очищены сервером, либо истекут сами. Держать пользователя в админке
       // после нажатия «Выйти» хуже, чем показать экран входа.
     } finally {
-      router.replace("/login");
+      router.replace(ADMIN_LOGIN_PATH);
       // Сбрасываем закешированные серверные payload'ы админки.
       router.refresh();
     }

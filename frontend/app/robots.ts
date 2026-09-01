@@ -6,6 +6,10 @@ import { SITE_URL } from "@/lib/site";
  * закрытые от сканирования URL не могут передать сигналы по canonical.
  * Фасеты консолидируются тегом rel=canonical (lib/seo.ts).
  * Здесь закрываем только то, что вообще не должно сканироваться.
+ *
+ * Форма входа отдельно не перечисляется: она живёт внутри /admin и уже закрыта
+ * правилом ниже. Писать её адрес явно было бы вредно: robots.txt открыт всем,
+ * и такой список — готовая карта закрытых адресов для сканеров.
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -16,7 +20,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin",
           "/admin/",
-          "/login",
           "/api/",
           // Внутренний поиск: бесконечные тонкие страницы по ?q=.
           "/search",
