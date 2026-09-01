@@ -19,14 +19,12 @@
   box-shadow: var(--shadow-md);
 }
 
-.inner {
-  transition: height var(--dur-base) var(--ease-standard);
-}
-
-.header[data-scrolled="true"] .inner {
-  height: 60px;
-}
-
+/* Высота шапки постоянна и НЕ анимируется.
+   Раньше .inner сжимался с var(--header-h) до 60px при скролле. Шапка sticky,
+   то есть остаётся в потоке: смена её высоты меняла высоту документа и тянула
+   весь контент вверх, браузер компенсировал это scroll anchoring-ом, прилетал
+   новый scroll, порог переключался обратно — панель дёргалась около границы.
+   Компактный вид теперь рисуется только трансформами: они не трогают layout. */
 .inner {
   display: flex;
   align-items: center;
@@ -61,12 +59,23 @@
   letter-spacing: -0.01em;
   color: var(--text-primary);
   white-space: nowrap;
+  transform-origin: left center;
+  transition: transform var(--dur-base) var(--ease-standard);
 }
 
 /* Второе слово акцентным цветом: вордмарк читается как Qareer Quest
    и без пробела, но остаётся компактным в шапке. */
 .brandAccent {
   color: var(--accent);
+}
+
+/* Компактное состояние: масштаб вместо высоты — без reflow. */
+.header[data-scrolled="true"] .logo {
+  transform: scale(0.88);
+}
+
+.header[data-scrolled="true"] .brandName {
+  transform: scale(0.93);
 }
 
 @media (hover: hover) {
@@ -231,5 +240,12 @@
 
   .mobileCta {
     margin-top: var(--space-12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header[data-scrolled="true"] .logo,
+  .header[data-scrolled="true"] .brandName {
+    transform: none;
   }
 }
