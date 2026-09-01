@@ -14,6 +14,7 @@ import com.devprep.api.web.dto.AdminProfessionRequest;
 import com.devprep.api.web.dto.CategoryDto;
 import com.devprep.api.web.dto.ProfessionDto;
 import java.util.List;
+import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>{@code @PreAuthorize} дублирует правило {@code /api/admin/**} из SecurityConfiguration — как в
  * AdminQuestionService, чтобы защита не зависела только от URL-матчера.
+ *
+ * <p>Адрес (slug) собирается здесь, а не проверяется валидатором: название темы или направления
+ * может быть любым, включая кириллицу и эмодзи.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,13 +50,14 @@ public class AdminCatalogService {
     @Transactional
     @PreAuthorize("!@authz.authRequired() or hasRole('ADMIN')")
     public ProfessionDto createProfession(AdminProfessionRequest request) {
-        if (professionRepository.findBySlug(request.slug()).isPresent()) {
-            throw new IllegalArgumentException(
-                    "Направление с slug «" + request.slug() + "» уже существует");
-        }
+        // В запросе slug может быть пустым, кириллическим или уже занятым.
+        String slug =
+                uniqueSlug(
+                        Slugs.slugify(request.slug(), request.title(), "napravlenie"),
+                        candidate -> professionRepository.findBySlug(candidate).isPresent());
 
         Profession profession = new Profession();
-        profession.setSlug(request.slug());
+        profession.setSlug(slug);
         profession.setSortOrder(nextProfessionSortOrder());
         applyProfession(profession, request);
         return mapper.toDto(professionRepository.save(profession));
@@ -122,15 +127,17 @@ public class AdminCatalogService {
     @Transactional
     @PreAuthorize("!@authz.authRequired() or hasRole('ADMIN')")
     public CategoryDto createCategory(AdminCategoryRequest request) {
-        if (categoryRepository
-                .findByProfessionSlugAndSlug(request.professionSlug(), request.slug())
-                .isPresent()) {
-            throw new IllegalArgumentException(
-                    "Тема с slug «" + request.slug() + "» уже есть в этом направлении");
-        }
+        String slug =
+                uniqueSlug(
+                        Slugs.slugify(request.slug(), request.title(), "tema"),
+                        candidate ->
+                                categoryRepository
+                                        .findByProfessionSlugAndSlug(
+                                                request.professionSlug(), candidate)
+                                        .isPresent());
 
         Category category = new Category();
-        category.setSlug(request.slug());
+        category.setSlug(slug);
         category.setSortOrder(nextCategorySortOrder(request.professionSlug()));
         applyCategory(category, request);
         return mapper.toDto(categoryRepository.save(category));
@@ -227,6 +234,23 @@ public class AdminCatalogService {
                         .max()
                         .orElse(0)
                 + 1;
+    }
+
+    /**
+     * Свободный адрес: если собранный slug занят, добавляется числовой хвост. Раньше повтор
+     * названия заканчивался ошибкой, хотя из интерфейса не было видно, что адрес уже занят.
+     */
+    private String uniqueSlug(String base, Predicate<String> taken) {
+        if (!taken.test(base)) {
+            return base;
+        }
+        for (int suffix = 2; suffix <= 999; suffix++) {
+            String candidate = Slugs.withSuffix(base, suffix);
+            if (!taken.test(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalArgumentException("Не удалось подобрать свободный адрес для «" + base + "»");
     }
 
     private static String blankTo(String value, String fallback) {

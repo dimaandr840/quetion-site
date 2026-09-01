@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { ApiError } from "@/lib/api";
+import { revalidateContent } from "@/lib/revalidate-content";
 import type { Industry, Profession } from "@/lib/types";
 import {
   createProfession,
   deleteProfession,
+  normalizeSlug,
   slugifyTitle,
   updateProfession,
   type ProfessionPayload,
@@ -122,17 +125,14 @@ function ProfessionFormModal({
       setError("Введите название направления.");
       return;
     }
-    if (!effectiveSlug) {
-      setError("Не удалось собрать адрес. Заполните его вручную латиницей.");
-      return;
-    }
     if (!industrySlug) {
       setError("Выберите сферу.");
       return;
     }
 
     const payload: ProfessionPayload = {
-      slug: effectiveSlug,
+      // Адрес доводится до латиницы и здесь, и на сервере.
+      slug: normalizeSlug(effectiveSlug, title, "napravlenie"),
       title: title.trim(),
       emoji: emoji.trim() || undefined,
       description: description.trim() || undefined,
@@ -261,7 +261,7 @@ function ProfessionFormModal({
               <span className={styles.fieldHint}>
                 {isEdit
                   ? "Адрес не меняется: на него уже ссылаются вопросы и поиск."
-                  : "Заполняется автоматически из названия."}
+                  : "Заполняется автоматически из названия. Если адрес занят, сервер добавит номер."}
               </span>
             </div>
 
@@ -331,6 +331,7 @@ export function AdminProfessionsView({
   professions,
   industries,
 }: AdminProfessionsViewProps) {
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Profession | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -342,6 +343,16 @@ export function AdminProfessionsView({
     industryFilter === "all"
       ? professions
       : professions.filter((item) => item.industrySlug === industryFilter);
+
+  /**
+   * Список приходит из серверного компонента, а ответ API лежит в кеше с тегом
+   * content. Без сброса тега созданное направление не появлялось в таблице даже
+   * после перезагрузки страницы.
+   */
+  async function refresh() {
+    await revalidateContent();
+    router.refresh();
+  }
 
   async function onDelete(profession: Profession) {
     if (
@@ -356,10 +367,10 @@ export function AdminProfessionsView({
     setBusySlug(profession.slug);
     try {
       await deleteProfession(profession.slug);
-      // Список приходит из серверного компонента, поэтому обновляем страницу целиком.
-      window.location.reload();
+      await refresh();
     } catch (caught) {
       setActionError(errorText(caught, "Не удалось удалить направление."));
+    } finally {
       setBusySlug(null);
     }
   }
@@ -499,7 +510,7 @@ export function AdminProfessionsView({
             setModalOpen(false);
             setEditing(null);
           }}
-          onSaved={() => window.location.reload()}
+          onSaved={() => void refresh()}
         />
       )}
     </div>

@@ -24,11 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
@@ -67,6 +71,9 @@ public class MediaService {
                             + "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
                             + "\\.(jpg|png)$");
 
+    /** Проксирующий эндпоинт: используется, когда публичный домен хранилища не задан. */
+    private static final String API_PREFIX = "/api/media/";
+
     private final MediaProperties properties;
     private final Optional<S3Client> client;
 
@@ -79,16 +86,53 @@ public class MediaService {
         return properties.isEnabled() && client.isPresent();
     }
 
-    /** Публичный адрес объекта. Собирается на чтении, в базе не хранится. */
+    /**
+     * Публичный адрес объекта. Собирается на чтении, в базе не хранится.
+     *
+     * <p>Если публичный домен не настроен (локальный стенд, приватный бакет), отдаём адрес
+     * собственного эндпоинта {@code GET /api/media/<key>}. Раньше здесь возвращался null, и
+     * сохранённая картинка просто не показывалась: в блоке ответа оставался только storageKey.
+     */
     public String publicUrl(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) {
             return null;
         }
         String base = properties.getPublicBaseUrl();
         if (base == null || base.isBlank()) {
-            return null;
+            return API_PREFIX + storageKey;
         }
         return base.endsWith("/") ? base + storageKey : base + "/" + storageKey;
+    }
+
+    /** Содержимое объекта для проксирующего эндпоинта. */
+    public record StoredObject(byte[] bytes, String contentType) {}
+
+    /**
+     * Читает объект из хранилища. Нужно, когда картинки отдаёт сам API, а не публичный
+     * домен. Чтение публичное, поэтому без {@code @PreAuthorize}, но ключ проверяется тем же
+     * шаблоном, что и на удалении: читать произвольные ключи бакета через API нельзя.
+     */
+    public Optional<StoredObject> load(String storageKey) {
+        if (!KEY_PATTERN.matcher(storageKey == null ? "" : storageKey).matches()) {
+            throw new IllegalArgumentException("Некорректный ключ файла");
+        }
+        try {
+            ResponseBytes<GetObjectResponse> object =
+                    requireClient()
+                            .getObjectAsBytes(
+                                    GetObjectRequest.builder()
+                                            .bucket(properties.getBucket())
+                                            .key(storageKey)
+                                            .build());
+            String contentType = object.response().contentType();
+            if (contentType == null || contentType.isBlank()) {
+                // Расширение задали мы сами при загрузке, ему можно верить.
+                contentType = storageKey.endsWith(".png") ? "image/png" : "image/jpeg";
+            }
+            return Optional.of(new StoredObject(object.asByteArray(), contentType));
+        } catch (NoSuchKeyException e) {
+            return Optional.empty();
+        }
     }
 
     @PreAuthorize("!@authz.authRequired() or hasRole('ADMIN')")
@@ -270,7 +314,7 @@ public class MediaService {
             }
         } catch (IOException e) {
             throw new IllegalArgumentException("Не удалось перекодировать изображение");
-        }
+            }
         return out.toByteArray();
     }
 
