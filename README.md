@@ -1,6 +1,8 @@
-# DevPrep
+# Qareer Quest
 
-Платформа вопросов и ответов для подготовки к IT-собеседованиям.
+Платформа вопросов и ответов для подготовки к собеседованиям.
+
+Рабочий домен: `qareerquest.com`.
 
 ## Что нужно установить
 
@@ -35,6 +37,13 @@ ADMIN_PASSWORD=change-me-admin-password
 
 ```bash
 openssl rand -base64 32
+```
+
+В production задайте реальный домен — от него зависят canonical, Open Graph, robots.txt и sitemap.xml:
+
+```env
+PUBLIC_ORIGIN=https://qareerquest.com
+COOKIE_SECURE=true
 ```
 
 3. Соберите и запустите проект:
@@ -100,7 +109,7 @@ SMTP_PORT=587
 SMTP_USERNAME=user
 SMTP_PASSWORD=password
 SMTP_STARTTLS=true
-PASSWORD_RESET_MAIL_FROM=no-reply@example.com
+PASSWORD_RESET_MAIL_FROM=no-reply@qareerquest.com
 PASSWORD_RESET_ENABLED=true
 ```
 

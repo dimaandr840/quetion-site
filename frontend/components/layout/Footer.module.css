@@ -25,25 +25,27 @@
   gap: var(--space-8);
 }
 
+/* Тот же SVG-знак, что и в шапке (components/ui/Logo.tsx). */
 .logo {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-6);
-  background: var(--indigo-600);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-outfit), system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 800;
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.24);
 }
 
 .brandName {
   font-family: var(--font-outfit), system-ui, sans-serif;
   font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.brandAccent {
+  color: var(--accent);
 }
 
 .tagline {
