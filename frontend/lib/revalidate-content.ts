@@ -11,7 +11,11 @@ import { CONTENT_CACHE_TAG } from "./server-api";
  * только через несколько минут: window.location.reload() перерисовывал страницу
  * из того же кеша. Админка вызывает это действие сразу после записи, а затем
  * делает router.refresh().
+ *
+ * В Next.js 16 у revalidateTag появился обязательный второй аргумент —
+ * профиль cacheLife. Профиль "max" сбрасывает записи независимо от их
+ * возраста, то есть даёт прежнее поведение «инвалидировать всё сейчас».
  */
 export async function revalidateContent(): Promise<void> {
-  revalidateTag(CONTENT_CACHE_TAG);
+  revalidateTag(CONTENT_CACHE_TAG, "max");
 }
