@@ -42,33 +42,37 @@
   flex-shrink: 0;
 }
 
+/* Знак — SVG-градиент из components/ui/Logo.tsx, фон и буква внутри самого SVG. */
 .logo {
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
   transition: transform var(--dur-base) var(--ease-spring),
     box-shadow var(--dur-base) var(--ease-out);
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-control);
-  background: var(--indigo-600);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-outfit), system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 800;
 }
 
 .brandName {
   font-family: var(--font-outfit), system-ui, sans-serif;
   font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Второе слово акцентным цветом: вордмарк читается как Qareer Quest
+   и без пробела, но остаётся компактным в шапке. */
+.brandAccent {
+  color: var(--accent);
 }
 
 @media (hover: hover) {
   .brand:hover .logo {
-    transform: rotate(-8deg) scale(1.08);
-    box-shadow: 0 6px 16px var(--accent-soft-border);
+    transform: rotate(-6deg) scale(1.08);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.38);
   }
 }
 
@@ -198,6 +202,10 @@
     display: inline-flex;
   }
 
+  .brandName {
+    font-size: 19px;
+  }
+
   .mobilePanel {
     display: flex;
     animation: dp-fade-down var(--dur-base) var(--ease-out) both;
@@ -225,4 +233,3 @@
     margin-top: var(--space-12);
   }
 }
-
