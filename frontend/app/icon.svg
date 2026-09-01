@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DevPrep">
-  <rect width="64" height="64" rx="14" fill="#4f46e5" />
-  <path
-    d="M20 16h13c9.4 0 16 6.5 16 16s-6.6 16-16 16H20V16zm8.5 7.5v17H33c5 0 8.4-3.4 8.4-8.5s-3.4-8.5-8.4-8.5h-4.5z"
-    fill="#ffffff"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Qareer Quest">
+  <defs>
+    <linearGradient id="qq-icon" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1" />
+      <stop offset="0.55" stop-color="#4f46e5" />
+      <stop offset="1" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#qq-icon)" />
+  <circle cx="29" cy="29" r="12.5" fill="none" stroke="#ffffff" stroke-width="5.5" />
+  <path d="M37.5 37.5 L46 46" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" />
+  <circle cx="47" cy="17" r="3.6" fill="#fbbf24" />
 </svg>
