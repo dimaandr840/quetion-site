@@ -33,7 +33,8 @@ export interface AnswerSectionPayload {
 export interface QuestionImagePayload {
   storageKey: string;
   url?: string;
-  alt: string;
+  /** Может быть пустым: описание картинки необязательное. */
+  alt?: string;
   caption?: string;
   width?: number;
   height?: number;
@@ -271,9 +272,11 @@ export function parseAnswerHtml(html: string): AnswerSectionPayload[] {
       if (tag === "figure" && element.getAttribute("data-image") === "1") {
         const storageKey = element.getAttribute("data-storage-key") ?? "";
         const image = element.querySelector("img");
+        // Описание необязательное: у вставленного скриншота его обычно нет, а пустой alt
+        // — корректная разметка для декоративной картинки.
         const alt = element.getAttribute("data-alt") || image?.getAttribute("alt") || "";
-        if (!storageKey || !alt.trim()) {
-          // Без ключа или alt бэкенд всё равно ответит ошибкой.
+        if (!storageKey) {
+          // Без ключа бэкенд всё равно ответит ошибкой.
           continue;
         }
         const captionNode = element.querySelector("figcaption");

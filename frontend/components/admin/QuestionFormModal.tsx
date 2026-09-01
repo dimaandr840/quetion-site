@@ -136,6 +136,12 @@ const TOOLBAR_GROUPS: ToolbarButton[][] = [
   ],
 ];
 
+/**
+ * Типы, которые принимает хранилище (MediaService.ALLOWED_CONTENT_TYPES). Всё остальное,
+ * что лежит в буфере обмена (HTML, RTF, файлы других форматов), вставляется как обычно.
+ */
+const PASTE_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
+
 /** Ближайший предок с нужным тегом внутри редактора — чтобы снимать форматирование повторным нажатием. */
 function closestTag(node: Node | null, tag: string, root: HTMLElement): HTMLElement | null {
   let current: Node | null = node;
@@ -349,29 +355,18 @@ export function QuestionFormModal({
   }
 
   /**
-   * Загрузка и вставка картинки в место курсора.
+   * Загрузка файла в хранилище и вставка готовой <figure> в место курсора.
+   * Общий путь для кнопки IMG и для вставки через Ctrl+V: в базе хранятся только
+   * ключи объектов, поэтому base64 из буфера обмена сначала уезжает в /api/admin/media.
    *
-   * alt спрашиваем до загрузки: он обязателен на бэкенде, и бессмысленно занимать
-   * место в хранилище файлом, который всё равно не сохранится.
+   * @param restoreSavedRange восстановить выделение из savedRangeRef: за время загрузки
+   *   фокус мог уйти (диалог файла, prompt).
    */
-  async function onImagePicked(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    // Сбрасываем сразу: иначе повторный выбор того же файла не даст события.
-    event.target.value = "";
-    if (!file) return;
-
-    const alt = window.prompt(
-      "Опишите картинку словами (обязательно): этот текст видят поиск и скринридеры",
-      ""
-    );
-    if (alt === null) return;
-    if (!alt.trim()) {
-      setError("У картинки обязателен альтернативный текст.");
-      return;
-    }
-
-    const caption = window.prompt("Подпись под картинкой (можно оставить пустой)", "") ?? "";
-
+  async function uploadAndInsert(
+    file: File,
+    meta?: { alt?: string; caption?: string },
+    restoreSavedRange = false
+  ) {
     setError(null);
     setUploading(true);
     try {
@@ -381,8 +376,9 @@ export function QuestionFormModal({
         align: "LEFT",
         storageKey: uploaded.storageKey,
         url: uploaded.url,
-        alt: alt.trim(),
-        caption: caption.trim() || undefined,
+        // alt необязателен: пустая строка — корректная разметка для декоративной картинки.
+        alt: meta?.alt?.trim() ?? "",
+        caption: meta?.caption?.trim() || undefined,
         width: uploaded.width,
         height: uploaded.height,
       });
@@ -392,7 +388,7 @@ export function QuestionFormModal({
       editor.focus();
 
       const selection = window.getSelection();
-      if (selection && savedRangeRef.current) {
+      if (restoreSavedRange && selection && savedRangeRef.current) {
         selection.removeAllRanges();
         selection.addRange(savedRangeRef.current);
       }
@@ -409,6 +405,72 @@ export function QuestionFormModal({
     } finally {
       setUploading(false);
     }
+  }
+
+  /**
+   * Выбор файла кнопкой IMG. Описание спрашиваем до загрузки, но не требуем:
+   * скриншот чаще всего объясняется соседним текстом. Отмена в prompt отменяет всю вставку.
+   */
+  async function onImagePicked(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Сбрасываем сразу: иначе повторный выбор того же файла не даст события.
+    event.target.value = "";
+    if (!file) return;
+
+    const alt = window.prompt(
+      "Описание картинки для поиска и скринридеров (можно оставить пустым)",
+      ""
+    );
+    if (alt === null) return;
+
+    const caption = window.prompt("Подпись под картинкой (можно оставить пустой)", "") ?? "";
+
+    await uploadAndInsert(file, { alt, caption }, true);
+  }
+
+  /**
+   * Ctrl+V со скриншотом в буфере. Браузер по умолчанию вставляет <img src="data:...">,
+   * который при сохранении молча выбрасывается (parseAnswerHtml берёт только figure
+   * с data-storage-key). Поэтому перехватываем вставку и грузим файл в хранилище.
+   */
+  function onEditorPaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+
+    let file: File | null = null;
+    for (const candidate of Array.from(clipboard.files ?? [])) {
+      if (PASTE_IMAGE_TYPES.has(candidate.type)) {
+        file = candidate;
+        break;
+      }
+    }
+    if (!file) {
+      // Скриншот из «Ножниц» приходит только в items, без files. getAsFile() вызываем
+      // синхронно: после выхода из обработчика clipboardData уже очищен.
+      for (const item of Array.from(clipboard.items ?? [])) {
+        if (item.kind !== "file" || !PASTE_IMAGE_TYPES.has(item.type)) continue;
+        const candidate = item.getAsFile();
+        if (candidate) {
+          file = candidate;
+          break;
+        }
+      }
+    }
+
+    // Обычный текст и HTML вставляются браузером как раньше.
+    if (!file) return;
+
+    event.preventDefault();
+    if (uploading) return;
+
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    savedRangeRef.current =
+      range && editor?.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
+
+    // Описание не спрашиваем: смысл Ctrl+V в том, чтобы картинка появилась сразу.
+    void uploadAndInsert(file, undefined, true);
   }
 
   /**
@@ -799,6 +861,7 @@ export function QuestionFormModal({
                   aria-multiline="true"
                   aria-labelledby="admin-question-answer-label"
                   onKeyDown={onEditorKeyDown}
+                  onPaste={onEditorPaste}
                   // Клик по картинке делает её целью кнопок выравнивания.
                   onClick={(event) => {
                     const target = event.target as HTMLElement;
@@ -812,8 +875,9 @@ export function QuestionFormModal({
                 />
               </div>
               <p className={styles.hint}>
-                Картинка вставляется кнопкой IMG туда, где стоит курсор, и всегда занимает
-                отдельную строку. Чтобы выровнять её — кликните по картинке и нажмите
+                Картинку можно вставить из буфера обмена по Ctrl+V или кнопкой IMG — она
+                появится там, где стоит курсор, и всегда занимает отдельную строку. Описание
+                картинки необязательное. Чтобы выровнять — кликните по картинке и нажмите
                 ≡L, ≡C или ≡R. Для текста те же кнопки работают по месту курсора.
                 {uploading && " Загружаем картинку..."}
               </p>

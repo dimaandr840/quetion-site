@@ -49,10 +49,13 @@ public class QuestionImage extends Auditable {
     @Column(name = "storage_key", nullable = false, length = 200)
     private String storageKey;
 
-    /** Обязателен: без него картинка недоступна для скринридеров и бесполезна для поиска. */
-    @NotBlank
+    /**
+     * Описание картинки. Необязательно: у вставленного скриншота его обычно нет, а пустая строка —
+     * корректная разметка для декоративной картинки. Колонка при этом остаётся {@code NOT NULL},
+     * поэтому вместо {@code null} сюда пишется пустая строка (см. {@code AdminQuestionService}).
+     */
     @Column(nullable = false, length = 300)
-    private String alt;
+    private String alt = "";
 
     @Column(length = 500)
     private String caption;

@@ -252,7 +252,9 @@ public class AdminQuestionService {
                 image = new QuestionImage();
                 image.setStorageKey(dto.storageKey());
             }
-            image.setAlt(dto.alt());
+            // Колонка alt осталась NOT NULL, а описание теперь необязательное: пустая строка
+            // вместо null позволяет обойтись без миграции схемы.
+            image.setAlt(dto.alt() == null ? "" : dto.alt());
             image.setCaption(dto.caption());
             image.setWidth(dto.width());
             image.setHeight(dto.height());
@@ -309,12 +311,11 @@ public class AdminQuestionService {
                 if (dto.storageKey() == null || dto.storageKey().isBlank()) {
                     throw new IllegalArgumentException("У картинки в ответе не указан файл");
                 }
-                if (dto.alt() == null || dto.alt().isBlank()) {
-                    // Без alt картинка недоступна для скринридеров и бесполезна для поиска.
-                    throw new IllegalArgumentException("У картинки в ответе не заполнен alt");
-                }
                 block.setStorageKey(dto.storageKey());
-                block.setAlt(dto.alt());
+                // alt необязателен: вставленный скриншот объясняется текстом вокруг, а пустой alt
+                // — корректная разметка для декоративной картинки. Колонка NOT NULL, поэтому null
+                // заменяется пустой строкой.
+                block.setAlt(dto.alt() == null ? "" : dto.alt());
                 block.setCaption(dto.caption());
                 block.setWidth(dto.width());
                 block.setHeight(dto.height());
