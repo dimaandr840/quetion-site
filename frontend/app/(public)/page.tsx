@@ -53,8 +53,8 @@ export default async function HomePage() {
   return (
     <>
       {/* HERO — асимметричный сплит вместо центрированного героя над градиентным
-          мешем. Слева ровно 4 текстовых элемента, справа — превью реальных
-          компонентов, а не нарисованный «скриншот» из div-ов. */}
+          мешем. Слева текст и поиск, справа — превью реальных компонентов, а не
+          нарисованный «скриншот» из div-ов. */}
       <div className={styles.heroWrap}>
         <section className={`shell ${styles.hero}`}>
           <div className={`stagger ${styles.heroCopy}`}>
@@ -70,6 +70,8 @@ export default async function HomePage() {
               <SearchBar placeholder={HERO.searchPlaceholder} showShortcut />
             </div>
 
+            {/* В герое остаётся одно действие: вторая ссылка вела на рассказ о
+                устройстве проекта и отвлекала от поиска вопросов. */}
             <div className={`animate-in ${styles.heroActions}`}>
               <ButtonLink
                 href={HERO.primaryCta.href}
@@ -78,10 +80,6 @@ export default async function HomePage() {
               >
                 {HERO.primaryCta.label}
               </ButtonLink>
-              <Link href={HERO.secondaryCta.href} className={styles.heroLink}>
-                {HERO.secondaryCta.label}
-                <Icon name="arrow-right" size={16} />
-              </Link>
             </div>
           </div>
 
