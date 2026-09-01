@@ -30,7 +30,10 @@ export interface CategoryPayload {
 
 /**
  * Транслитерация названия в slug. Тот же алгоритм, что для вопросов:
- * бэкенд принимает только строчную латиницу, цифры и дефис.
+ * адрес страницы — строчная латиница, цифры и дефис.
+ *
+ * Теперь тот же алгоритм есть и на бэкенде (Slugs.java), так что здесь он нужен
+ * только для предпросмотра адреса в форме.
  */
 const CYRILLIC_MAP: Record<string, string> = {
   а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh",
@@ -49,7 +52,26 @@ export function slugifyTitle(title: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  return base.slice(0, 64);
+  // Обрезка по длине могла оставить дефис в конце — такой адрес некрасиво
+  // выглядит в URL и раньше отклонялся валидацией.
+  return base.slice(0, 64).replace(/-+$/g, "");
+}
+
+/**
+ * Адрес для отправки на сервер: ручной ввод, иначе название, иначе запасной
+ * вариант с меткой времени. Раньше форма просто отказывалась сохранять, если из
+ * названия не собирался адрес (например, название из одних эмодзи).
+ */
+export function normalizeSlug(
+  rawSlug: string,
+  title: string,
+  fallbackPrefix: string
+): string {
+  return (
+    slugifyTitle(rawSlug) ||
+    slugifyTitle(title) ||
+    `${fallbackPrefix}-${Date.now().toString(36)}`
+  );
 }
 
 /* ---- Чтение ---- */
