@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { ApiError } from "@/lib/api";
+import { revalidateContent } from "@/lib/revalidate-content";
 import type { Category, Profession } from "@/lib/types";
 import {
   createCategory,
   deleteCategory,
+  normalizeSlug,
   slugifyTitle,
   updateCategory,
   type CategoryPayload,
@@ -120,17 +123,15 @@ function CategoryFormModal({
       setError("Введите название темы.");
       return;
     }
-    if (!effectiveSlug) {
-      setError("Не удалось собрать адрес. Заполните его вручную латиницей.");
-      return;
-    }
     if (!professionSlug) {
       setError("Выберите направление.");
       return;
     }
 
     const payload: CategoryPayload = {
-      slug: effectiveSlug,
+      // Название может быть любым: адрес доводится до латиницы здесь и ещё раз
+      // на сервере, поэтому ручная правка поля больше не даёт 400.
+      slug: normalizeSlug(effectiveSlug, title, "tema"),
       title: title.trim(),
       emoji: emoji.trim() || undefined,
       description: description.trim() || undefined,
@@ -259,7 +260,7 @@ function CategoryFormModal({
               <span className={styles.fieldHint}>
                 {isEdit
                   ? "Адрес и направление не меняются: на них уже ссылаются вопросы."
-                  : "Заполняется автоматически из названия."}
+                  : "Заполняется автоматически из названия. Если адрес занят, сервер добавит номер."}
               </span>
             </div>
 
@@ -310,6 +311,7 @@ export function AdminCategoriesView({
   professions,
   categories,
 }: AdminCategoriesViewProps) {
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -322,6 +324,16 @@ export function AdminCategoriesView({
       ? categories
       : categories.filter((item) => item.professionSlug === professionFilter);
 
+  /**
+   * Список рендерит серверный компонент, а ответ API кешируется по тегу content.
+   * Простой reload() показывал тот же кеш — созданная тема «пропадала» до истечения
+   * revalidate. Поэтому сначала сбрасываем тег, потом перезапрашиваем дерево.
+   */
+  async function refresh() {
+    await revalidateContent();
+    router.refresh();
+  }
+
   async function onDelete(category: Category) {
     if (!window.confirm(`Удалить тему «${category.title}»? Действие необратимо.`)) return;
 
@@ -329,9 +341,10 @@ export function AdminCategoriesView({
     setBusySlug(category.slug);
     try {
       await deleteCategory(category.professionSlug, category.slug);
-      window.location.reload();
+      await refresh();
     } catch (caught) {
       setActionError(errorText(caught, "Не удалось удалить тему."));
+    } finally {
       setBusySlug(null);
     }
   }
@@ -472,7 +485,7 @@ export function AdminCategoriesView({
             setModalOpen(false);
             setEditing(null);
           }}
-          onSaved={() => window.location.reload()}
+          onSaved={() => void refresh()}
         />
       )}
     </div>
