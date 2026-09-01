@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { HERO } from "@/lib/content";
 import { navLinks } from "@/lib/nav";
+import { SITE_NAME } from "@/lib/site";
 import { Icon } from "../ui/Icon";
+import { Logo } from "../ui/Logo";
 import { SearchOverlay } from "./SearchOverlay";
 import { ThemeToggle } from "./ThemeToggle";
 import styles from "./Header.module.css";
@@ -77,11 +79,11 @@ export function Header({
   return (
     <header className={styles.header} data-scrolled={scrolled}>
       <div className={`shell ${styles.inner}`}>
-        <Link href="/" className={styles.brand}>
-          <span className={styles.logo} aria-hidden="true">
-            D
+        <Link href="/" className={styles.brand} aria-label={`${SITE_NAME} — на главную`}>
+          <Logo className={styles.logo} idSuffix="header" decorative />
+          <span className={styles.brandName}>
+            Qareer<span className={styles.brandAccent}>Quest</span>
           </span>
-          <span className={styles.brandName}>DevPrep</span>
         </Link>
 
         <nav className={styles.nav} aria-label="Основная навигация">
