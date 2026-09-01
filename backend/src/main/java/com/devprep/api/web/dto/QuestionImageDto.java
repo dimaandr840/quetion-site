@@ -7,8 +7,13 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Картинка вопроса. На запись клиент присылает {@code storageKey} (выданный
- * {@code POST /api/admin/media}) и {@code alt}; {@code url} на запись игнорируется —
- * адрес всегда собирает бэкенд, иначе в базу можно было бы подсунуть чужой домен.
+ * {@code POST /api/admin/media}); {@code url} на запись игнорируется — адрес всегда собирает
+ * бэкенд, иначе в базу можно было бы подсунуть чужой домен.
+ *
+ * <p>{@code alt} необязателен: скриншот, вставленный в ответ, обычно объясняется соседним
+ * текстом и подписью, а пустой {@code alt} — корректная разметка для декоративной картинки.
+ * Требовать описание на каждую вставку означало бы блокировать сохранение ответа из-за
+ * необязательной метаданной.
  *
  * <p>{@code Pattern} принимает только ключи нашего формата. Это не косметика: без проверки в
  * {@code question_image.storage_key} попала бы произвольная строка от клиента, а из неё потом
@@ -26,7 +31,7 @@ public record QuestionImageDto(
                         message = "Некорректный ключ файла")
                 String storageKey,
         String url,
-        @NotBlank @Size(max = 300) String alt,
+        @Size(max = 300) String alt,
         @Size(max = 500) String caption,
         Integer width,
         Integer height) {}
