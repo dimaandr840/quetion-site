@@ -1,0 +1,16 @@
+databaseChangeLog:
+  # Та же причина, что и в 003-answer-section-position: для @OneToMany + @OrderColumn
+  # Hibernate вставляет дочернюю строку двумя шагами — сначала INSERT без position,
+  # затем UPDATE с индексом элемента в списке. Пока колонка была NOT NULL, первый
+  # INSERT падал с SQLState 23502, и сохранение вопроса с картинкой возвращало 500.
+  #
+  # Порядок картинок вопроса всё равно задаётся разметкой ответа (блоки IMAGE внутри
+  # секций), поэтому ограничение на уровне БД здесь ничего не защищало.
+  - changeSet:
+      id: 013-question-image-position-nullable
+      author: devprep
+      changes:
+        - dropNotNullConstraint:
+            tableName: question_image
+            columnName: position
+            columnDataType: int
