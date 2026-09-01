@@ -1,7 +1,16 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm ci регулярно падал с ECONNRESET на медленном или нестабильном канале:
+# даём больше попыток и более длинные таймауты, а cache mount сохраняет уже
+# скачанные тарболлы между сборками, чтобы повторный запуск продолжал с места обрыва.
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 FROM node:24-alpine AS build
 WORKDIR /app
