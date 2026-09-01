@@ -1,6 +1,9 @@
 package com.devprep.api.service;
 
+import com.devprep.api.domain.AnswerBlock;
+import com.devprep.api.domain.AnswerBlockKind;
 import com.devprep.api.domain.AnswerSection;
+import com.devprep.api.domain.BlockAlign;
 import com.devprep.api.domain.Category;
 import com.devprep.api.domain.CodeSample;
 import com.devprep.api.domain.Level;
@@ -13,6 +16,7 @@ import com.devprep.api.repository.ProfessionRepository;
 import com.devprep.api.repository.QuestionRepository;
 import com.devprep.api.search.MeilisearchService;
 import com.devprep.api.web.dto.AdminQuestionRowDto;
+import com.devprep.api.web.dto.AnswerBlockDto;
 import com.devprep.api.web.dto.AnswerSectionDto;
 import com.devprep.api.web.dto.CodeSampleDto;
 import com.devprep.api.web.dto.PracticeTaskDto;
@@ -187,8 +191,38 @@ public class AdminQuestionService {
             }
         }
 
-        applyImages(question, request.images() == null ? List.of() : request.images(), detachedImages);
+        applyImages(question, deriveImages(request.sections()), detachedImages);
         return question;
+    }
+
+    /**
+     * Набор файлов вопроса выводится из разметки ответа, а не приходит отдельным полем: иначе
+     * удалённая из текста картинка осталась бы числиться за вопросом и никогда не уехала бы из бакета.
+     *
+     * <p>Таблица question_image при этом сохраняется: на ней держится уникальный индекс по ключу
+     * объекта и уборка осиротевших файлов.
+     */
+    private List<QuestionImageDto> deriveImages(List<AnswerSectionDto> sections) {
+        List<QuestionImageDto> images = new ArrayList<>();
+        for (AnswerSectionDto section : sections) {
+            if (section.blocks() == null) {
+                continue;
+            }
+            for (AnswerBlockDto block : section.blocks()) {
+                if (block.kind() != AnswerBlockKind.IMAGE) {
+                    continue;
+                }
+                images.add(
+                        new QuestionImageDto(
+                                block.storageKey(),
+                                null,
+                                block.alt(),
+                                block.caption(),
+                                block.width(),
+                                block.height()));
+            }
+        }
+        return images;
     }
 
     /**
@@ -247,7 +281,7 @@ public class AdminQuestionService {
         AnswerSection section = new AnswerSection();
         section.setSectionKey(dto.id());
         section.setHeading(dto.heading());
-        section.setParagraphs(dto.paragraphs() == null ? new ArrayList<>() : new ArrayList<>(dto.paragraphs()));
+        section.setBlocks(toBlocks(dto.blocks()));
         section.setBullets(dto.bullets() == null ? new ArrayList<>() : new ArrayList<>(dto.bullets()));
 
         CodeSampleDto code = dto.code();
@@ -259,6 +293,37 @@ public class AdminQuestionService {
             section.setCode(sample);
         }
         return section;
+    }
+
+    private List<AnswerBlock> toBlocks(List<AnswerBlockDto> blocks) {
+        List<AnswerBlock> result = new ArrayList<>();
+        if (blocks == null) {
+            return result;
+        }
+        for (AnswerBlockDto dto : blocks) {
+            AnswerBlock block = new AnswerBlock();
+            block.setKind(dto.kind());
+            block.setAlign(dto.align() == null ? BlockAlign.LEFT : dto.align());
+            if (dto.kind() == AnswerBlockKind.IMAGE) {
+                // Проверка здесь, а не аннотацией: обязательность полей зависит от типа блока.
+                if (dto.storageKey() == null || dto.storageKey().isBlank()) {
+                    throw new IllegalArgumentException("У картинки в ответе не указан файл");
+                }
+                if (dto.alt() == null || dto.alt().isBlank()) {
+                    // Без alt картинка недоступна для скринридеров и бесполезна для поиска.
+                    throw new IllegalArgumentException("У картинки в ответе не заполнен alt");
+                }
+                block.setStorageKey(dto.storageKey());
+                block.setAlt(dto.alt());
+                block.setCaption(dto.caption());
+                block.setWidth(dto.width());
+                block.setHeight(dto.height());
+            } else {
+                block.setBody(dto.text() == null ? "" : dto.text());
+            }
+            result.add(block);
+        }
+        return result;
     }
 
     private void recount(Question question) {

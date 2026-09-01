@@ -253,6 +253,11 @@
   background: var(--surface-raised);
 }
 
+.toolbarButton:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
 .toolbarLabel {
   font-size: 14px;
   font-weight: 800;
@@ -328,6 +333,27 @@
   color: var(--text-primary);
 }
 
+/* Картинка внутри ответа. Блок всегда во всю ширину, а сама картинка
+   выравнивается через text-align — точно так же, как на публичной странице,
+   чтобы редактор показывал то же, что увидит читатель. */
+
+.editorContent figure {
+  margin: var(--space-16) 0;
+}
+
+.editorContent figure img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-8);
+  border: 1px solid var(--border-base);
+}
+
+.editorContent figcaption {
+  margin-top: var(--space-8);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* Инлайн-разметка: то же оформление, что на публичной странице вопроса. */
 
 .editorContent code {
@@ -357,6 +383,14 @@
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Подсказка под редактором: объясняет, как вставить и выровнять картинку. */
+
+.hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 /* ---- Переключатель публикации ---- */

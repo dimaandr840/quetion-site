@@ -7,6 +7,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
+/**
+ * Отдельного списка картинок в запросе больше нет: картинки живут блоками внутри секций ответа,
+ * и второй источник правды разъезжался бы с первым при любой правке.
+ */
 public record QuestionUpsertRequest(
         @NotBlank @Size(max = 128) String slug,
         @NotBlank @Size(max = 512) String title,
@@ -19,7 +23,5 @@ public record QuestionUpsertRequest(
         boolean popular,
         /** null трактуется как «опубликован» — совместимость с клиентами без этого поля. */
         Boolean published,
-        @NotNull List<AnswerSectionDto> sections,
-        List<PracticeTaskDto> tasks,
-        /** null и пустой список равнозначны: у вопроса не остаётся ни одной картинки. */
-        List<@Valid QuestionImageDto> images) {}
+        @NotNull List<@Valid AnswerSectionDto> sections,
+        List<PracticeTaskDto> tasks) {}

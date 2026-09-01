@@ -1,5 +1,7 @@
 package com.devprep.api.service;
 
+import com.devprep.api.domain.AnswerBlock;
+import com.devprep.api.domain.AnswerBlockKind;
 import com.devprep.api.domain.AnswerSection;
 import com.devprep.api.domain.Category;
 import com.devprep.api.domain.CodeSample;
@@ -10,6 +12,7 @@ import com.devprep.api.domain.Profession;
 import com.devprep.api.domain.Question;
 import com.devprep.api.domain.QuestionImage;
 import com.devprep.api.domain.Specialization;
+import com.devprep.api.web.dto.AnswerBlockDto;
 import com.devprep.api.web.dto.AnswerSectionDto;
 import com.devprep.api.web.dto.CategoryDto;
 import com.devprep.api.web.dto.CodeSampleDto;
@@ -151,11 +154,39 @@ public class ContentMapper {
         return new AnswerSectionDto(
                 section.getSectionKey(),
                 section.getHeading(),
-                section.getParagraphs().isEmpty() ? null : List.copyOf(section.getParagraphs()),
+                section.getBlocks().isEmpty()
+                        ? null
+                        : section.getBlocks().stream().map(this::toDto).toList(),
                 section.getBullets().isEmpty() ? null : List.copyOf(section.getBullets()),
                 code == null || code.isEmpty()
                         ? null
                         : new CodeSampleDto(code.getLanguage(), code.getTitle(), code.getLines()));
+    }
+
+    /** У картинки адрес добавляется на чтении — так же, как для {@link QuestionImage}. */
+    public AnswerBlockDto toDto(AnswerBlock block) {
+        if (block.getKind() == AnswerBlockKind.IMAGE) {
+            return new AnswerBlockDto(
+                    AnswerBlockKind.IMAGE,
+                    block.getAlign(),
+                    null,
+                    block.getStorageKey(),
+                    mediaService.publicUrl(block.getStorageKey()),
+                    block.getAlt(),
+                    block.getCaption(),
+                    block.getWidth(),
+                    block.getHeight());
+        }
+        return new AnswerBlockDto(
+                AnswerBlockKind.PARAGRAPH,
+                block.getAlign(),
+                block.getBody(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     /** «Профессия > Специализация > Тема» — та же строка, что рисует фронтенд в хлебных крошках. */

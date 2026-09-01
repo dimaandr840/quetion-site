@@ -1,6 +1,8 @@
 package com.devprep.api.seed;
 
+import com.devprep.api.domain.AnswerBlock;
 import com.devprep.api.domain.AnswerSection;
+import com.devprep.api.domain.BlockAlign;
 import com.devprep.api.domain.Category;
 import com.devprep.api.domain.CodeSample;
 import com.devprep.api.domain.Industry;
@@ -267,15 +269,23 @@ public class SeedImporter implements ApplicationRunner {
                 .build();
     }
 
+    /**
+     * Формат seed/content.json не менялся: там по-прежнему плоский список абзацев — картинок в
+     * базовом контенте нет. Каждый абзац становится блоком с выравниванием по левому краю.
+     */
     private AnswerSection toSection(SeedContent.SeedSection s) {
+        List<AnswerBlock> blocks = new ArrayList<>();
+        if (s.paragraphs() != null) {
+            for (String paragraph : s.paragraphs()) {
+                blocks.add(AnswerBlock.paragraph(paragraph, BlockAlign.LEFT));
+            }
+        }
+
         AnswerSection section =
                 AnswerSection.builder()
                         .sectionKey(s.id())
                         .heading(s.heading())
-                        .paragraphs(
-                                s.paragraphs() == null
-                                        ? new ArrayList<>()
-                                        : new ArrayList<>(s.paragraphs()))
+                        .blocks(blocks)
                         .bullets(
                                 s.bullets() == null ? new ArrayList<>() : new ArrayList<>(s.bullets()))
                         .build();

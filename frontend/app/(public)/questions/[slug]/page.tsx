@@ -8,6 +8,7 @@ import {
   fetchQuestions,
 } from "@/lib/content-api";
 import { stripInlineHtml } from "@/lib/inline-html";
+import { AnswerBlocks } from "@/components/ui/AnswerBlocks";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { LevelBadge } from "@/components/ui/Badge";
 import { CardGrid, CompactQuestionCard } from "@/components/ui/Cards";
@@ -122,14 +123,8 @@ export default async function QuestionPage({ params }: PageProps) {
             <section key={section.id} id={section.id} className={styles.section}>
               <h2 className={`h3 ${styles.sectionHeading}`}>{section.heading}</h2>
 
-              {section.paragraphs?.map((paragraph, index) => (
-                <RichText
-                  key={index}
-                  as="p"
-                  className={styles.paragraph}
-                  html={paragraph}
-                />
-              ))}
+              {/* Абзацы и картинки идут одним списком: порядок задаёт автор. */}
+              <AnswerBlocks blocks={section.blocks} paragraphClassName={styles.paragraph} />
 
               {section.bullets && (
                 <ul className={styles.bullets}>
