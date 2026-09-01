@@ -166,12 +166,19 @@ export default async function QuestionPage({ params }: PageProps) {
             </section>
           )}
 
+          {/* Соседние вопросы — карточки: стрелка задаёт направление, лейбл
+              и заголовок читаются как единый кликабельный блок. */}
           {(previous || next) && (
             <nav className={styles.siblings} aria-label="Навигация по вопросам">
               {previous && (
                 <Link href={`/questions/${previous.slug}`} className={styles.sibling}>
-                  <span className={styles.siblingLabel}>Предыдущий вопрос</span>
-                  <span className={styles.siblingTitle}>{previous.title}</span>
+                  <span className={styles.siblingArrow} aria-hidden="true">
+                    ←
+                  </span>
+                  <span className={styles.siblingBody}>
+                    <span className={styles.siblingLabel}>Предыдущий вопрос</span>
+                    <span className={styles.siblingTitle}>{previous.title}</span>
+                  </span>
                 </Link>
               )}
               {next && (
@@ -179,8 +186,13 @@ export default async function QuestionPage({ params }: PageProps) {
                   href={`/questions/${next.slug}`}
                   className={`${styles.sibling} ${styles.siblingNext}`}
                 >
-                  <span className={styles.siblingLabel}>Следующий вопрос</span>
-                  <span className={styles.siblingTitle}>{next.title}</span>
+                  <span className={styles.siblingArrow} aria-hidden="true">
+                    →
+                  </span>
+                  <span className={styles.siblingBody}>
+                    <span className={styles.siblingLabel}>Следующий вопрос</span>
+                    <span className={styles.siblingTitle}>{next.title}</span>
+                  </span>
                 </Link>
               )}
             </nav>

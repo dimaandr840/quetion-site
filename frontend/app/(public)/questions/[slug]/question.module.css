@@ -242,36 +242,92 @@
   border-left-color: var(--accent);
 }
 
+/* ---- Переходы к соседним вопросам ----
+   Раньше это были два текстовых блока, прижатых к краям контейнера: на широком
+   экране между ними зияла пустота, а сами ссылки не читались как кликабельные.
+   Теперь — сетка из двух равных карточек со стрелкой-указателем. */
+
 .siblings {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-16);
-  padding-top: var(--space-24);
-  border-top: 1px solid var(--border-base);
 }
 
 .sibling {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 380px;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-12);
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
 }
 
+/* Карточка «следующий» всегда во второй колонке, даже если предыдущего нет. */
 .siblingNext {
+  grid-column: 2;
+  flex-direction: row-reverse;
   text-align: right;
-  margin-left: auto;
+}
+
+.sibling:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.siblingArrow {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-base);
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.sibling:hover .siblingArrow {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.siblingBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .siblingLabel {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
+/* Длинные формулировки вопросов режем по двум строкам, чтобы карточки
+   не разъезжались по высоте. */
 .siblingTitle {
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.45;
   color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sibling:hover .siblingTitle {
@@ -296,5 +352,27 @@
   .toc {
     position: static;
     order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .siblings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .siblingNext {
+    grid-column: 1;
+    flex-direction: row;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sibling {
+    transition: none;
+  }
+
+  .sibling:hover {
+    transform: none;
   }
 }
