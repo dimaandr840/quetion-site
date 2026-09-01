@@ -51,7 +51,13 @@ const SECURITY_HEADERS: Array<[string, string]> = [
   ["pragma", "no-cache"],
   ["cross-origin-opener-policy", "same-origin"],
   ["cross-origin-resource-policy", "same-origin"],
-  ["cross-origin-embedder-policy", "require-corp"],
+  // credentialless, а не require-corp: картинки вопросов лежат на домене
+  // хранилища, который не присылает Cross-Origin-Resource-Policy, а
+  // require-corp блокирует любой кросс-доменный subresource без такого
+  // заголовка — превью в редакторе ответа не отображалось бы даже при
+  // разрешающем img-src. credentialless запрашивает картинки без cookie и
+  // сохраняет изоляцию процесса.
+  ["cross-origin-embedder-policy", "credentialless"],
   [
     "permissions-policy",
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
