@@ -75,6 +75,20 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  /**
+   * Юридические тексты переехали в /legal/*, но старый адрес /privacy уже мог
+   * попасть в выдачу и внешние ссылки. Оставлять там 404 нельзя: ссылка на
+   * политику конфиденциальности должна работать всегда (ст. 12(1) GDPR:
+   * информация должна быть легко доступной). Здесь именно redirect, а не
+   * rewrite: адрес страницы действительно сменился, и поисковикам нужен 301.
+   * На upgrade-insecure-requests это не натыкается, как случай favicon.ico:
+   * Location относительный, без схемы и хоста.
+   */
+  async redirects() {
+    return [
+      { source: "/privacy", destination: "/legal/privacy", permanent: true },
+    ];
+  },
   // Современные браузеры берут иконку из <link rel="icon" href="/icon.svg">,
   // но краулеры и старые клиенты по-прежнему запрашивают /favicon.ico вслепую.
   // Именно rewrite, а не redirect: CSP-директива upgrade-insecure-requests

@@ -12,23 +12,32 @@ import {
  * Google Analytics 4 строго по согласию.
  *
  * § 25(1) TDDDG и ст. 6(1)(a) GDPR: доступ к данным в устройстве без
- * необходимости требует явного согласия. Поэтому тег не просто «выключен» —
- * скрипт вообще не запрашивается, пока пользователь не нажал «Принять все».
- * Так же работает и отзыв: тег глушится флагом ga-disable-* и cookie _ga
- * удаляются, чтобы отказ не оставался формальным.
+ * технической необходимости требует явного согласия. Поэтому тег не просто
+ * «выключен флагом»: скрипт вообще не запрашивается, пока пользователь не
+ * нажал «Принять все» — до этого к Google не уходит ни один запрос, а значит
+ * и IP-адрес посетителя не раскрывается.
  *
- * Идентификатор берётся из NEXT_PUBLIC_GA_ID. Если переменной нет,
- * компонент не рендерит ничего — локальная разработка остаётся чистой.
+ * Отзыв согласия (ст. 7(3) GDPR) тоже должен быть реальным, поэтому при
+ * отказе тег глушится флагом ga-disable-* и cookie _ga* удаляются.
+ *
+ * Идентификатор берётся из NEXT_PUBLIC_GA_ID (читается на сборке, поэтому в
+ * compose его нужно передать и build arg‘ом, как NEXT_PUBLIC_MEDIA_BASE_URL). Если
+ * переменной нет, компонент не рендерит ничего — локальная разработка и
+ * стенды остаются без аналитики.
+ *
+ * Важно: публичная CSP в nginx/nginx.conf должна разрешать googletagmanager и
+ * google-analytics, иначе согласие есть, а скрипт блокирует браузер.
  */
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
 
 type WindowWithFlags = Window & Record<string, unknown>;
 
-/** Удаляем cookie Google на всех вариантах домена: точного мы не знаем. */
+/** Удаляем cookie Google на всех вариантах домена: точный нам не известен. */
 function dropAnalyticsCookies(): void {
   const host = window.location.hostname;
   const parts = host.split(".");
   const domains = new Set<string>([host, `.${host}`]);
+
   if (parts.length > 2) {
     const base = parts.slice(-2).join(".");
     domains.add(base);
@@ -58,7 +67,7 @@ export function GoogleAnalytics() {
   useEffect(() => {
     if (!GA_ID) return;
 
-    // Читаем решение только на клиенте: иначе оно попадёт в кеш страницы.
+    // Решение читается только на клиенте: иначе оно попадёт в кеш страницы.
     setGranted(hasAnalyticsConsent());
 
     const onChange = (event: Event) => {
@@ -80,24 +89,29 @@ export function GoogleAnalytics() {
 
   if (!GA_ID || !granted) return null;
 
+  const gaSrc = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_ID)}`;
+
   return (
     <>
-      <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-        strategy="afterInteractive"
-      />
+      <Script src={gaSrc} strategy="afterInteractive" />
       <Script id="ga-init" strategy="afterInteractive">
         {[
           "window.dataLayer = window.dataLayer || [];",
           "function gtag(){window.dataLayer.push(arguments);}",
           "gtag('js', new Date());",
+          // Consent Mode v2: рекламные режимы остаются denied всегда — мы на них
+          // согласия не спрашиваем и рекламу не показываем.
           "gtag('consent', 'default', {" +
             "ad_storage: 'denied'," +
             "ad_user_data: 'denied'," +
             "ad_personalization: 'denied'," +
             "analytics_storage: 'granted'" +
             "});",
-          `gtag('config', '${GA_ID}', { anonymize_ip: true, allow_google_signals: false, allow_ad_personalization_signals: false });`,
+          `gtag('config', '${GA_ID}', {` +
+            " anonymize_ip: true," +
+            " allow_google_signals: false," +
+            " allow_ad_personalization_signals: false" +
+            " });",
         ].join("\n")}
       </Script>
     </>
