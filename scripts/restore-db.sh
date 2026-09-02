@@ -39,11 +39,11 @@ if [[ "${FORCE:-false}" != "true" ]]; then
 fi
 
 # api и web останавливаем: открытые соединения и фоновые записи ломают
-# pg_restore --clean (DROP не проходит из-за зависимостей и блокировок).
+# pg_restore --clean: DROP не проходит из-за зависимостей и блокировок.
 docker compose stop api web
 
-# --single-transaction: при ошибке база остаётся в прежнем состоянии,
-# а не в半 восстановленном.
+# --single-transaction: при ошибке база останется в прежнем состоянии,
+# а не в наполовину восстановленном.
 docker compose exec -T postgres \
 	pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
 	--clean --if-exists --no-owner --no-privileges --single-transaction <"$DUMP"
