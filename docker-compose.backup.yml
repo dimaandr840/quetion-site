@@ -1,64 +1,117 @@
-# Автоматические бэкапы PostgreSQL.
+# Оверлей резервного копирования: pgBackRest + непрерывный архив WAL + PITR.
 #
-# Запуск вместе с основным стеком:
 #   docker compose -f docker-compose.yml -f docker-compose.backup.yml up -d
 #
-# Дампы складываются в ./backups на хосте — том обязательно нужно включить
-# в бэкап хоста или синхронизировать во внешнее хранилище: копия на том же
-# диске, что и сама база, не спасает от смерти диска.
+# Делает две вещи:
+#   1. пересобирает postgres из ./postgres (тот же PostgreSQL 16 + pgbackrest) и
+#      включает архивацию WAL;
+#   2. добавляет сайдкар pgbackrest: расписание бэкапов, проверка восстановления,
+#      контроль свежести и алерты.
+#
+# ВНИМАНИЕ: оверлей не опционален в бою. С archive_mode=on база начинает
+# копить WAL, если архивация не работает, и без сайдкара с алертами это
+# заканчивается заполнением диска. Запускайте оба файла вместе или ни один.
+
+x-pgbackrest-env: &pgbackrest-env
+  PGBACKREST_STANZA: devprep
+  PGBACKREST_REPO1_S3_BUCKET: ${BACKUP_S3_BUCKET:?BACKUP_S3_BUCKET обязателен}
+  # Cloudflare R2: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+  PGBACKREST_REPO1_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?BACKUP_S3_ENDPOINT обязателен}
+  # R2 принимает только region=auto; для других S3 укажите реальный регион.
+  PGBACKREST_REPO1_S3_REGION: ${BACKUP_S3_REGION:-auto}
+  PGBACKREST_REPO1_S3_KEY: ${BACKUP_S3_ACCESS_KEY:?BACKUP_S3_ACCESS_KEY обязателен}
+  PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_S3_SECRET_KEY:?BACKUP_S3_SECRET_KEY обязателен}
+  PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS:?BACKUP_CIPHER_PASS обязателен}
+  PGBACKREST_PG1_USER: ${POSTGRES_USER:-devprep}
+  PGBACKREST_PG1_DATABASE: ${POSTGRES_DB:-devprep}
+
 services:
-  db-backup:
-    image: postgres:16-alpine
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+  postgres:
+    build:
+      context: ./postgres
+    image: devprep-postgres-pgbackrest:16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-devprep}
-      POSTGRES_USER: ${POSTGRES_USER:-devprep}
-      # pg_dump читает пароль из PGPASSWORD, интерактивный ввод в контейнере невозможен.
-      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      # Интервал между дампами в секундах (по умолчанию раз в сутки).
-      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
-      # Сколько дней хранить дампы; 0 отключает удаление старых.
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-      # Задержка перед первым дампом, чтобы не грузить БД сразу после деплоя.
-      BACKUP_INITIAL_DELAY: ${BACKUP_INITIAL_DELAY:-60}
-    volumes:
-      - ./backups:/backups
-    # Свой цикл вместо cron: в образе postgres нет cron-демона, а busybox-crond
-    # потребовал бы отдельного конфига и всё равно не умеет ретеншен.
-    entrypoint:
-      - /bin/sh
+      <<: *pgbackrest-env
+    command:
+      - postgres
+      # Минимальный wal_level для архива и PITR.
       - -c
-      - |
-        set -eu
-        mkdir -p /backups
-        sleep "$$BACKUP_INITIAL_DELAY"
-        while true; do
-          stamp=$$(date +%Y%m%d-%H%M%S)
-          out="/backups/$$POSTGRES_DB-$$stamp.dump"
-          echo "[db-backup] start $$out"
-          if pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
-              -Fc --clean --if-exists >"$$out.part"; then
-            mv "$$out.part" "$$out"
-            echo "[db-backup] ok $$out"
-          else
-            rm -f "$$out.part"
-            echo "[db-backup] FAILED $$out" >&2
-          fi
-          if [ "$$BACKUP_RETENTION_DAYS" -gt 0 ]; then
-            find /backups -maxdepth 1 -name "$$POSTGRES_DB-*.dump" \
-              -mtime "+$$BACKUP_RETENTION_DAYS" -print -delete
-          fi
-          sleep "$$BACKUP_INTERVAL"
-        done
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      # Сама база вызывает pgbackrest из своего контейнера; благодаря archive-async
+      # она не ждёт сети и не тормозит транзакции.
+      - -c
+      - archive_command=pgbackrest --stanza=devprep archive-push %p
+      # Потолок RPO на тихой базе: WAL закрывается не реже раза в минуту,
+      # даже если записей мало.
+      - -c
+      - archive_timeout=60
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=2GB
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Сокет шарится с сайдкаром: pgBackRest подключается к БД локально.
+      - postgres-socket:/var/run/postgresql
+      - pgbackrest-spool:/var/spool/pgbackrest
+      - pgbackrest-log:/var/log/pgbackrest
+      - ./postgres/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+
+  pgbackrest:
+    build:
+      context: ./postgres
+    image: devprep-postgres-pgbackrest:16
+    restart: unless-stopped
+    # Тот же uid, что у PostgreSQL: иначе нет доступа к PGDATA и сокету.
+    user: postgres
+    # bash явно: файлы из git могут приехать без бита исполнения.
+    entrypoint: ["bash", "/opt/backup/pgbackrest-scheduler.sh"]
     depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
+    environment:
+      <<: *pgbackrest-env
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD обязателен}
+      # Расписание.
+      BACKUP_TICK_SECONDS: ${BACKUP_TICK_SECONDS:-86400}
+      BACKUP_INITIAL_DELAY: ${BACKUP_INITIAL_DELAY:-60}
+      BACKUP_FULL_INTERVAL_DAYS: ${BACKUP_FULL_INTERVAL_DAYS:-7}
+      BACKUP_VERIFY_INTERVAL_DAYS: ${BACKUP_VERIFY_INTERVAL_DAYS:-7}
+      BACKUP_LOGICAL_INTERVAL_DAYS: ${BACKUP_LOGICAL_INTERVAL_DAYS:-7}
+      BACKUP_LOGICAL_KEEP: ${BACKUP_LOGICAL_KEEP:-4}
+      # Пороги алертов.
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-30}
+      BACKUP_WAL_MAX_AGE_MINUTES: ${BACKUP_WAL_MAX_AGE_MINUTES:-15}
+      BACKUP_PGWAL_MAX_MB: ${BACKUP_PGWAL_MAX_MB:-4096}
+      BACKUP_ALERT_WEBHOOK: ${BACKUP_ALERT_WEBHOOK:-}
+      # Минимально ожидаемые объёмы данных при проверке восстановления.
+      VERIFY_MIN_QUESTION: ${VERIFY_MIN_QUESTION:-1}
+      VERIFY_MAX_DATA_AGE_DAYS: ${VERIFY_MAX_DATA_AGE_DAYS:-0}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-socket:/var/run/postgresql
+      - pgbackrest-spool:/var/spool/pgbackrest
+      - pgbackrest-log:/var/log/pgbackrest
+      - backup-state:/var/lib/backup-state
+      - backup-verify:/var/tmp/verify
+      - ./postgres/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ./scripts:/opt/backup:ro
+      # Логические дампы лежат на хосте, чтобы их можно было увезти вручную.
+      # Каталог должен быть записываем для uid 999: sudo chown 999:999 backups
+      - ./backups:/backups
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-socket:
+  pgbackrest-spool:
+  pgbackrest-log:
+  backup-state:
+  backup-verify:
