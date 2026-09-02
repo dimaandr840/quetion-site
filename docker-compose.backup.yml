@@ -1,0 +1,64 @@
+# Автоматические бэкапы PostgreSQL.
+#
+# Запуск вместе с основным стеком:
+#   docker compose -f docker-compose.yml -f docker-compose.backup.yml up -d
+#
+# Дампы складываются в ./backups на хосте — том обязательно нужно включить
+# в бэкап хоста или синхронизировать во внешнее хранилище: копия на том же
+# диске, что и сама база, не спасает от смерти диска.
+services:
+  db-backup:
+    image: postgres:16-alpine
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devprep}
+      POSTGRES_USER: ${POSTGRES_USER:-devprep}
+      # pg_dump читает пароль из PGPASSWORD, интерактивный ввод в контейнере невозможен.
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # Интервал между дампами в секундах (по умолчанию раз в сутки).
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+      # Сколько дней хранить дампы; 0 отключает удаление старых.
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      # Задержка перед первым дампом, чтобы не грузить БД сразу после деплоя.
+      BACKUP_INITIAL_DELAY: ${BACKUP_INITIAL_DELAY:-60}
+    volumes:
+      - ./backups:/backups
+    # Свой цикл вместо cron: в образе postgres нет cron-демона, а busybox-crond
+    # потребовал бы отдельного конфига и всё равно не умеет ретеншен.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /backups
+        sleep "$$BACKUP_INITIAL_DELAY"
+        while true; do
+          stamp=$$(date +%Y%m%d-%H%M%S)
+          out="/backups/$$POSTGRES_DB-$$stamp.dump"
+          echo "[db-backup] start $$out"
+          if pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+              -Fc --clean --if-exists >"$$out.part"; then
+            mv "$$out.part" "$$out"
+            echo "[db-backup] ok $$out"
+          else
+            rm -f "$$out.part"
+            echo "[db-backup] FAILED $$out" >&2
+          fi
+          if [ "$$BACKUP_RETENTION_DAYS" -gt 0 ]; then
+            find /backups -maxdepth 1 -name "$$POSTGRES_DB-*.dump" \
+              -mtime "+$$BACKUP_RETENTION_DAYS" -print -delete
+          fi
+          sleep "$$BACKUP_INTERVAL"
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
