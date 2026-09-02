@@ -11,24 +11,26 @@ import {
 /**
  * Google Analytics 4 строго по согласию.
  *
- * § 25(1) TDDDG и ст. 6(1)(a) GDPR: доступ к данным в устройстве без
- * технической необходимости требует явного согласия. Поэтому тег не просто
- * «выключен флагом»: скрипт вообще не запрашивается, пока пользователь не
- * нажал «Принять все» — до этого к Google не уходит ни один запрос, а значит
- * и IP-адрес посетителя не раскрывается.
+ * § 25(1) TDDDG и ст. 6(1)(a) GDPR: доступ к данным в устройстве без технической
+ * необходимости требует явного согласия. Поэтому тег не просто «выключен
+ * флагом»: скрипт вообще не запрашивается, пока пользователь не нажал
+ * «Принять все» — до этого к Google не уходит ни один запрос, а значит, не
+ * раскрывается и IP-адрес посетителя.
  *
- * Отзыв согласия (ст. 7(3) GDPR) тоже должен быть реальным, поэтому при
- * отказе тег глушится флагом ga-disable-* и cookie _ga* удаляются.
+ * Отзыв согласия (ст. 7(3) GDPR) тоже должен быть реальным, поэтому при отказе
+ * тег глушится флагом ga-disable-* и cookie _ga* удаляются.
  *
- * Идентификатор берётся из NEXT_PUBLIC_GA_ID (читается на сборке, поэтому в
- * compose его нужно передать и build arg‘ом, как NEXT_PUBLIC_MEDIA_BASE_URL). Если
- * переменной нет, компонент не рендерит ничего — локальная разработка и
- * стенды остаются без аналитики.
+ * Идентификатор берётся из NEXT_PUBLIC_GA_ID. Переменная читается на сборке,
+ * поэтому в compose её нужно передать и build arg‘ом — так же, как
+ * NEXT_PUBLIC_MEDIA_BASE_URL. Если переменной нет, компонент не рендерит ничего:
+ * локальная разработка и стенды остаются без аналитики.
  *
  * Важно: публичная CSP в nginx/nginx.conf должна разрешать googletagmanager и
  * google-analytics, иначе согласие есть, а скрипт блокирует браузер.
  */
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
+
+const GTAG_ORIGIN = "https://www.googletagmanager.com";
 
 type WindowWithFlags = Window & Record<string, unknown>;
 
@@ -89,7 +91,7 @@ export function GoogleAnalytics() {
 
   if (!GA_ID || !granted) return null;
 
-  const gaSrc = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_ID)}`;
+  const gaSrc = GTAG_ORIGIN + "/gtag/js?id=" + encodeURIComponent(GA_ID);
 
   return (
     <>
@@ -99,15 +101,17 @@ export function GoogleAnalytics() {
           "window.dataLayer = window.dataLayer || [];",
           "function gtag(){window.dataLayer.push(arguments);}",
           "gtag('js', new Date());",
-          // Consent Mode v2: рекламные режимы остаются denied всегда — мы на них
-          // согласия не спрашиваем и рекламу не показываем.
+          // Consent Mode v2: рекламные режимы всегда denied — мы на них согласия
+          // не спрашиваем и рекламу не показываем.
           "gtag('consent', 'default', {" +
             "ad_storage: 'denied'," +
             "ad_user_data: 'denied'," +
             "ad_personalization: 'denied'," +
             "analytics_storage: 'granted'" +
             "});",
-          `gtag('config', '${GA_ID}', {` +
+          "gtag('config', '" +
+            GA_ID +
+            "', {" +
             " anonymize_ip: true," +
             " allow_google_signals: false," +
             " allow_ad_personalization_signals: false" +
