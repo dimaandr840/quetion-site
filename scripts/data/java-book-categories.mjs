@@ -1,0 +1,22 @@
+export default [
+  { "slug": "oop", "title": "ООП", "emoji": "🧱", "description": "Объектно-ориентированное программирование: абстракция, инкапсуляция, наследование и полиморфизм." },
+  { "slug": "jvm", "title": "JVM", "emoji": "⚙️", "description": "Устройство JVM, память, загрузка классов и выполнение байт-кода." },
+  { "slug": "core-java", "title": "Java Core", "emoji": "☕", "description": "Синтаксис Java, типы, классы, исключения, строки, generics и базовые API." },
+  { "slug": "collections", "title": "Java Collections", "emoji": "📚", "description": "Коллекции Java, их контракты, внутреннее устройство и сложность операций." },
+  { "slug": "java-8", "title": "Java 8", "emoji": "8️⃣", "description": "Лямбда-выражения, Stream API, Optional, Date/Time API и нововведения Java 8." },
+  { "slug": "io", "title": "Ввод/вывод", "emoji": "📥", "description": "Потоки ввода-вывода, файлы, NIO и работа с данными." },
+  { "slug": "serialization", "title": "Сериализация", "emoji": "📦", "description": "Сериализация объектов Java, Externalizable и совместимость версий." },
+  { "slug": "multithreading", "title": "Многопоточность", "emoji": "🧵", "description": "Потоки, синхронизация, Java Memory Model и java.util.concurrent." },
+  { "slug": "servlets-jsp", "title": "Servlets, JSP, JSTL", "emoji": "🌐", "description": "Java Web: сервлеты, JSP, JSTL, фильтры, сессии и жизненный цикл запросов." },
+  { "slug": "databases", "title": "Базы данных", "emoji": "🗄️", "description": "Основы баз данных, транзакции, индексы и нормализация." },
+  { "slug": "sql-databases", "title": "SQL", "emoji": "🔎", "description": "SQL-запросы, соединения, группировки, подзапросы и ограничения." },
+  { "slug": "jdbc", "title": "JDBC", "emoji": "🔌", "description": "Подключение Java к базам данных, Statement, PreparedStatement и транзакции." },
+  { "slug": "testing", "title": "Тестирование", "emoji": "🧪", "description": "Виды тестирования, модульные тесты и практики проверки Java-кода." },
+  { "slug": "logging", "title": "Журналирование", "emoji": "📝", "description": "Уровни и фасады журналирования, конфигурация и практики логирования." },
+  { "slug": "uml", "title": "UML", "emoji": "📐", "description": "Диаграммы UML и моделирование программных систем." },
+  { "slug": "xml", "title": "XML", "emoji": "🏷️", "description": "XML, XSD, DTD, XPath, парсеры и пространства имён." },
+  { "slug": "design-patterns", "title": "Шаблоны проектирования", "emoji": "🧩", "description": "Порождающие, структурные и поведенческие шаблоны проектирования." },
+  { "slug": "html", "title": "HTML", "emoji": "🧾", "description": "Основы HTML, семантика, элементы, формы и атрибуты." },
+  { "slug": "css", "title": "CSS", "emoji": "🎨", "description": "Селекторы, каскад, блочная модель и базовые свойства CSS." },
+  { "slug": "web-basics", "title": "Основы Web", "emoji": "🌍", "description": "HTTP, TCP/IP, cookies, сессии, AJAX, WebSocket и веб-серверы." }
+];
