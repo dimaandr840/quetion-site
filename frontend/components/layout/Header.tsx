@@ -21,6 +21,10 @@ export interface HeaderProps {
   searchTopics?: Array<{ title: string; href: string; count: number }>;
 }
 
+/** Порог включения компактного состояния и порог возврата к обычному. */
+const SCROLLED_ON = 24;
+const SCROLLED_OFF = 8;
+
 export function Header({
   searchSuggestions = [],
   searchTopics = [],
@@ -33,18 +37,31 @@ export function Header({
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   /**
-   * Шапка «сжимается» и получает тень после первого же скролла:
-   * так видно, что контент уезжает под полупрозрачный слой.
-   * Обработчик passive и без состояния: ставит флаг только при смене значения.
+   * Шапка получает тень и границу после первого скролла.
+   *
+   * Порог с гистерезисом (включаем на 24px, выключаем на 8px) и rAF-троттлинг:
+   * с одним порогом в 8px состояние переключалось туда-сюда, когда браузер сам
+   * подкручивал scrollTop после смены геометрии страницы, и панель дёргалась.
    */
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 8);
+    let frame = 0;
+
+    const update = () => {
+      frame = 0;
+      const y = window.scrollY;
+      setScrolled((prev) => (prev ? y > SCROLLED_OFF : y > SCROLLED_ON));
     };
 
-    onScroll();
+    const onScroll = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(update);
+    };
+
+    update();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   /** Ctrl/Cmd+K — глобальная точка входа в поиск с любой страницы. */
