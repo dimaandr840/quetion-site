@@ -56,12 +56,18 @@ export function Footer() {
             © {year} {SITE_NAME}. Все права защищены.
           </p>
 
-          {/* Ссылка на политику обязана быть на каждой странице (ч. 2 ст. 18.1
-              152-ФЗ), рядом — возможность отозвать согласие на cookie. */}
+          {/* Ст. 13 GDPR: сведения об обработке должны быть легко доступны с
+              любой страницы, поэтому ссылки живут в подвале — рядом с
+              возможностью отозвать согласие на cookie. */}
           <ul className={styles.legal}>
             <li>
-              <Link href="/privacy" className={styles.legalLink}>
-                Политика обработки персональных данных
+              <Link href="/legal/privacy" className={styles.legalLink}>
+                Политика конфиденциальности
+              </Link>
+            </li>
+            <li>
+              <Link href="/legal/cookies" className={styles.legalLink}>
+                Cookie
               </Link>
             </li>
             <li>

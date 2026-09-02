@@ -14,12 +14,14 @@ import styles from "./CookieConsent.module.css";
  * Баннер согласия на cookie.
  *
  * Две равнозначные кнопки без тёмных паттернов: отказаться должно быть
- * ровно так же просто, как согласиться. Крестика «закрыть без выбора» нет
+ * ровно так же просто, как согласиться — этого требует § 25 TDDDG и
+ * практика надзорных органов ЕС. Крестика «закрыть без выбора» нет
  * намеренно: молчание не является согласием, а баннер без решения
  * не должен исчезать.
  *
  * Никаких счётчиков компонент не грузит — он только фиксирует решение и
- * шлёт событие. Код метрики подключается к hasAnalyticsConsent().
+ * шлёт событие. Загрузку GA4 по этому событию делает
+ * components/analytics/GoogleAnalytics.tsx.
  */
 export function CookieConsent() {
   const [open, setOpen] = useState(false);
@@ -52,10 +54,15 @@ export function CookieConsent() {
           <p className={styles.title}>Мы используем cookie</p>
           <p className={styles.description}>
             Технически необходимые cookie нужны для работы сайта — без них
-            не работает вход и выбор темы. Аналитические cookie мы ставим
-            только с вашего согласия. Подробности — в{" "}
-            <Link href="/privacy" className={styles.link}>
-              политике обработки персональных данных
+            не работает вход и выбор темы. Аналитику Google Analytics мы
+            подключаем только с вашего согласия и не подключаем при отказе.
+            Подробности — в{" "}
+            <Link href="/legal/cookies" className={styles.link}>
+              политике cookie
+            </Link>{" "}
+            и{" "}
+            <Link href="/legal/privacy" className={styles.link}>
+              политике конфиденциальности
             </Link>
             .
           </p>
