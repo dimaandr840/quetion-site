@@ -1,0 +1,109 @@
+/* Системный скелетон.
+
+   Шиммер объявлен локально и движется через transform: анимация
+   background-position идёт через перерисовку слоя на каждом кадре, причём
+   одновременно на всех плейсхолдерах списка.
+
+   SHAPE CONSISTENCY LOCK: скелетон повторяет форму того, что подменяет,
+   поэтому радиус приходит из варианта, а не задаётся на месте. */
+
+.base {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-muted);
+  /* Подложка не должна съезжать в ноль при height: auto. */
+  min-height: var(--space-8);
+}
+
+.base::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--surface-raised) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .base::after {
+    animation: skeleton-slide 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Бесконечная анимация — первое, что нужно выключить по просьбе
+   пользователя. Сам скелетон остаётся видимым: он несёт информацию о
+   структуре, а не только о том, что «что-то грузится». */
+@media (prefers-reduced-motion: reduce) {
+  .base {
+    background: var(--surface-muted);
+  }
+}
+
+.text {
+  border-radius: var(--radius-inset);
+  /* Высота строки текста, а не произвольные 20px. */
+  height: 1em;
+}
+
+.control {
+  border-radius: var(--radius-control);
+  height: var(--control-h-md);
+}
+
+.surface {
+  border-radius: var(--radius-surface);
+}
+
+.circle {
+  border-radius: var(--radius-pill);
+  aspect-ratio: 1;
+}
+
+/* ---------- Составные блоки ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-stack-tight);
+}
+
+/* Последняя строка абзаца короче остальных — иначе блок читается как
+   таблица, а не как текст. */
+.lastLine {
+  width: 60%;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-stack-tight);
+  padding: var(--space-24);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.cardTitle {
+  height: 1.5em;
+  width: 55%;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-stack);
+}
