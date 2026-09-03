@@ -32,7 +32,17 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
 
 const GTAG_ORIGIN = "https://www.googletagmanager.com";
 
-type WindowWithFlags = Window & Record<string, unknown>;
+/**
+ * Флаг ga-disable-<id> — часть публичного контракта gtag.js, но в типах DOM его
+ * нет: `Window` не имеет индексной подписи, поэтому прямое приведение к
+ * `Record<string, unknown>` TypeScript отвергает (TS2352). Приводим через
+ * `unknown` в одном месте, а не кастом на каждой строке присваивания.
+ */
+function setGaDisabled(disabled: boolean): void {
+  if (!GA_ID) return;
+  (window as unknown as Record<string, unknown>)[`ga-disable-${GA_ID}`] =
+    disabled;
+}
 
 /** Удаляем cookie Google на всех вариантах домена: точный нам не известен. */
 function dropAnalyticsCookies(): void {
@@ -62,7 +72,7 @@ export function GoogleAnalytics() {
 
   const revoke = useCallback(() => {
     if (!GA_ID) return;
-    (window as WindowWithFlags)[`ga-disable-${GA_ID}`] = true;
+    setGaDisabled(true);
     dropAnalyticsCookies();
   }, []);
 
@@ -76,7 +86,7 @@ export function GoogleAnalytics() {
       const state = (event as CustomEvent<ConsentState>).detail;
 
       if (state?.analytics === true) {
-        (window as WindowWithFlags)[`ga-disable-${GA_ID}`] = false;
+        setGaDisabled(false);
         setGranted(true);
         return;
       }
