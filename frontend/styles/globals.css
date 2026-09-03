@@ -15,15 +15,26 @@ body {
 
 html {
   scroll-behavior: smooth;
+  /* Липкая шапка перекрывала цель перехода: и анкор, и клавиатурный фокус
+     уезжали под неё (WCAG 2.2, focus not obscured). */
+  scroll-padding-top: calc(var(--header-h) + var(--space-16));
+  /* Не даём мобильному Safari масштабировать текст по своему усмотрению,
+     но и не запрещаем пользователю зум. */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--page-bg);
   color: var(--text-primary);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 16px;
+  /* rem вместо px: жёсткий пиксель игнорировал настройку размера шрифта
+     в браузере, то есть вся типографика не масштабировалась. */
+  font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Длинные ссылки, слаги и идентификаторы переносим вместо распирания
+     контейнера; break-all к обычной прозе не применяем. */
+  overflow-wrap: break-word;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -34,6 +45,18 @@ a {
 
 button {
   font-family: inherit;
+}
+
+/* Убирает 300ms задержку тапа на мобильных, не отключая пинч-зум. */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea,
+summary,
+label {
+  touch-action: manipulation;
 }
 
 ul,
@@ -50,10 +73,15 @@ h4 {
   margin: 0;
   font-family: var(--font-outfit), system-ui, sans-serif;
   color: var(--text-primary);
+  /* Без балансировки последнее слово заголовка регулярно оставалось
+     одиноким на своей строке. Эвристика браузера, деградирует в обычный
+     перенос. */
+  text-wrap: balance;
 }
 
 p {
   margin: 0;
+  text-wrap: pretty;
 }
 
 code,
@@ -62,21 +90,25 @@ kbd {
   font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-4);
+code,
+kbd {
+  overflow-wrap: anywhere;
 }
 
-/* Клавиатурный фокус получает мягкое свечение — обводка в 2px на тёмном
-   фоне читалась плохо. Мышь свечение не видит: только :focus-visible. */
-a:focus-visible,
-button:focus-visible,
-[role="button"]:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  box-shadow: 0 0 0 4px var(--accent-soft);
+/* Клавиатурный фокус — один индикатор на весь проект.
+
+   Было две конкурирующие декларации: обводка 2px цвета --accent плюс
+   свечение --accent-soft. На главной кнопке (заливка --accent) обводка
+   совпадала с фоном самой кнопки и фокус физически не читался.
+
+   Теперь между элементом и обводкой лежит зазор цвета поверхности:
+   индикатор виден и на акцентной заливке, и на светлом фоне.
+   border-radius больше не переопределяем — он ломал форму скруглённых
+   контролов в момент фокуса. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
 /* Плавные переходы между страницами там, где браузер умеет View Transitions. */
@@ -96,6 +128,18 @@ textarea:focus-visible {
   scrollbar-color: var(--border-strong) transparent;
 }
 
+/* В режиме принудительных цветов системная обводка обязательна, а стекло
+   превращается в обычную поверхность. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  .glass {
+    background: Canvas;
+  }
+}
+
 /* ---- Layout shell ---- */
 
 .shell {
@@ -113,6 +157,12 @@ textarea:focus-visible {
 
 .page > main {
   flex: 1;
+}
+
+/* main получает фокус программно после смены маршрута (RouteFocus).
+   Своей обводки у него быть не должно — она обвела бы пол-страницы. */
+.page > main:focus {
+  outline: none;
 }
 
 /* ---- Typography utilities (named after the Figma type scale) ---- */
@@ -164,38 +214,52 @@ textarea:focus-visible {
   max-width: 62ch;
 }
 
+/* Размеры в rem: пользовательская настройка шрифта должна работать. */
 .body-base {
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--text-secondary);
 }
 
+/* 13px мельче нижней границы для читаемого текста; 14px — минимум,
+   на котором подпись остаётся подписью, а не мелким шрифтом. */
 .caption {
-  font-size: 13px;
+  font-size: 0.875rem;
   line-height: 1.4;
   color: var(--text-muted);
 }
 
 .overline {
   font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
 }
 
+/* Мера строки для длинной прозы: 60–75 символов на десктопе. */
+.measure {
+  max-width: 70ch;
+}
+
+/* Табличные цифры для счётчиков и метрик: колонки перестают дёргаться
+   при смене значения. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 .skip-link {
   position: absolute;
   top: 0;
   left: 50%;
-  z-index: 100;
+  z-index: var(--z-modal);
   transform: translate(-50%, -120%);
   padding: var(--space-12) var(--space-24);
   border-radius: 0 0 var(--radius-8) var(--radius-8);
   background: var(--accent);
-  color: var(--text-inverse);
-  font-size: 14px;
+  color: var(--on-accent);
+  font-size: 0.875rem;
   font-weight: 600;
   transition: transform 0.15s ease;
 }
@@ -248,19 +312,20 @@ textarea:focus-visible {
   flex: 0 0 auto;
 }
 
-@media (max-width: 900px) {
+/* Адаптивные отступы идут по каноническому набору брейкпоинтов
+   (см. --bp-* в tokens.css), а не по единственному значению 900px. */
+@media (max-width: 1024px) {
+  :root {
+    --shell-pad: 40px;
+  }
+}
+
+@media (max-width: 768px) {
   :root {
     --shell-pad: 24px;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
+/* Блок prefers-reduced-motion живёт в motion.css — единственный на проект.
+   Здесь он дублировался с другой длительностью (0.01ms против 0.001ms),
+   из-за чего результат зависел от порядка импорта. */

@@ -70,8 +70,22 @@ export function ResultsToolbar({
 
   return (
     <div className={styles.bar}>
-      <p className={styles.count}>
-        Найдено <span className={styles.countValue}>{matched}</span> из {total}
+      {/*
+        Фильтры применяются без перезагрузки: счётчик менялся молча,
+        и пользователь со скринридером не узнавал результат своего
+        же действия. role="status" озвучивает новое число, не перебивая
+        текущее чтение; aria-atomic — чтобы фраза читалась целиком,
+        а не одним изменившимся числом без контекста.
+      */}
+      <p
+        className={styles.count}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        Найдено{" "}
+        <span className={`${styles.countValue} tabular-nums`}>{matched}</span> из{" "}
+        {total}
       </p>
 
       {hasActive && (

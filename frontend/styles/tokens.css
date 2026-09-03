@@ -2,6 +2,11 @@
    and dark-design-system-tokens (3:2679). Hex values are authoritative. */
 
 :root {
+  /* Сообщаем браузеру активную схему: от неё зависят системные скроллбары,
+     нативные контролы, автозаполнение и цвет выделения. Без этого в тёмной
+     теме остаются светлые системные элементы. */
+  color-scheme: light;
+
   /* Brand — Indigo */
   --indigo-50: #eef2ff;
   --indigo-100: #e0e7ff;
@@ -39,6 +44,9 @@
   --error-text: #7f1d1d;
   --info-light: #f0f9ff;
   --info-main: #0ea5e9;
+  /* info-text отсутствовал, хотя у остальных статусов он есть: sky-800 даёт
+     8.1 на --info-light и закрывает пару «текст на инфо-подложке». */
+  --info-text: #075985;
   --orange-text: #c2410c;
 
   /* Semantic surface aliases — remapped by [data-theme="dark"] */
@@ -49,6 +57,10 @@
   --header-bg: #ffffff;
   --border-base: var(--slate-200);
   --border-strong: var(--slate-300);
+  /* Граница интерактивного контрола — это non-text contrast: минимум 3:1.
+     --border-base (#e2e8f0) даёт на белом 1.2, то есть поле ввода в покое
+     фактически не имеет видимой границы. slate-500 даёт 4.8. */
+  --border-input: var(--slate-500);
   --text-primary: var(--slate-900);
   --text-secondary: var(--slate-600);
   --text-muted: var(--slate-500);
@@ -61,6 +73,14 @@
   --code-bg: var(--slate-900);
   --code-header-bg: var(--slate-800);
   --code-text: var(--slate-100);
+
+  /* on-* : цвет контента ПОВЕРХ заливки того же имени.
+     Раньше такие пары подбирались в каждом компоненте вручную. */
+  --on-accent: #ffffff;
+  --on-success: var(--success-text);
+  --on-warning: var(--warning-text);
+  --on-error: var(--error-text);
+  --on-info: var(--info-text);
 
   /* Spacing scale */
   --space-4: 4px;
@@ -94,6 +114,8 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
+
   --page-bg: var(--slate-950);
   --surface: var(--slate-800);
   --surface-muted: var(--slate-900);
@@ -101,6 +123,9 @@
   --header-bg: var(--slate-900);
   --border-base: var(--slate-700);
   --border-strong: var(--slate-600);
+  /* slate-600 на --surface даёт 2.0 — граница контрола ниже 3:1.
+     slate-400 даёт 5.6 и остаётся спокойной. */
+  --border-input: var(--slate-400);
   --text-primary: #f8fafc;
   --text-secondary: var(--slate-300);
   --text-muted: var(--slate-400);
@@ -123,6 +148,14 @@
   --error-light: rgba(239, 68, 68, 0.14);
   --error-text: #fca5a5;
   --info-light: rgba(14, 165, 233, 0.14);
+  --info-text: #7dd3fc;
+
+  /* Акцент в тёмной теме светлый, поэтому контент поверх него — тёмный. */
+  --on-accent: var(--slate-950);
+  --on-success: var(--success-text);
+  --on-warning: var(--warning-text);
+  --on-error: var(--error-text);
+  --on-info: var(--info-text);
 
   --shadow-sm: 0px 1px 1px rgba(0, 0, 0, 0.4);
   --shadow-md: 0px 4px 6px rgba(0, 0, 0, 0.45);
@@ -149,12 +182,14 @@
   --radius-surface: 14px;
   --radius-shell: 20px;
 
+  /* Тени собираются из --shadow-tint. Раньше токен был объявлен, но тени
+     хардкодили rgba(15, 23, 42, …) — сменить оттенок тени было невозможно. */
   --shadow-tint: 15 23 42;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 2px 4px rgba(15, 23, 42, 0.04),
-    0 8px 20px -8px rgba(15, 23, 42, 0.1);
-  --shadow-lg: 0 2px 4px rgba(15, 23, 42, 0.04),
-    0 18px 40px -14px rgba(15, 23, 42, 0.18);
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-tint) / 0.05);
+  --shadow-md: 0 2px 4px rgb(var(--shadow-tint) / 0.04),
+    0 8px 20px -8px rgb(var(--shadow-tint) / 0.1);
+  --shadow-lg: 0 2px 4px rgb(var(--shadow-tint) / 0.04),
+    0 18px 40px -14px rgb(var(--shadow-tint) / 0.18);
   /* Акцентная тень — только для главного действия. */
   --shadow-accent: 0 18px 40px -18px rgba(79, 70, 229, 0.45);
 
@@ -176,11 +211,13 @@
 }
 
 [data-theme="dark"] {
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.45),
-    0 8px 20px -8px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.45),
-    0 18px 40px -14px rgba(0, 0, 0, 0.65);
+  /* В тёмной теме тень — это чистая тьма, а не тонированный slate. */
+  --shadow-tint: 0 0 0;
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-tint) / 0.5);
+  --shadow-md: 0 2px 4px rgb(var(--shadow-tint) / 0.45),
+    0 8px 20px -8px rgb(var(--shadow-tint) / 0.55);
+  --shadow-lg: 0 2px 4px rgb(var(--shadow-tint) / 0.45),
+    0 18px 40px -14px rgb(var(--shadow-tint) / 0.65);
   --shadow-accent: 0 18px 40px -18px rgba(129, 140, 248, 0.4);
 
   --glass-bg: rgba(15, 23, 42, 0.66);
@@ -199,4 +236,37 @@
     --glass-blur: 0px;
     --glass-inset: none;
   }
+}
+
+/* ============================================================================
+   Слой 3 — служебные токены.
+
+   Шрифтовые алиасы: имена --font-outfit / --font-dm-sans разъехались с
+   реальными шрифтами после перехода на кириллические семейства. Компоненты
+   продолжают читать старые имена, физические шрифты приходят из next/font
+   как --font-display / --font-sans / --font-mono.
+   ========================================================================== */
+
+:root {
+  --font-outfit: var(--font-display);
+  --font-dm-sans: var(--font-sans);
+  --font-jetbrains-mono: var(--font-mono);
+
+  /* Шкала слоёв: до этого z-index назначался на месте (100 у skip-link,
+     -1 у декоративных слоёв) и порядок нельзя было проверить. */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 20;
+  --z-overlay: 40;
+  --z-modal: 100;
+  --z-toast: 1000;
+
+  /* Канонический набор брейкпоинтов — 375 / 768 / 1024 / 1440.
+     Значения нельзя подставить в @media из переменной, поэтому набор
+     зафиксирован здесь как единственный источник правды: любые новые
+     media-запросы берут числа отсюда, а не подбираются на глаз. */
+  --bp-sm: 375px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1440px;
 }

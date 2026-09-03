@@ -8,7 +8,15 @@
  * Доступность: текст остаётся цельным для скринридеров — слова разделены
  * пробелами внутри span, ничего не скрыто и не дублируется.
  * При prefers-reduced-motion анимация выключается (см. motion.css).
+ *
+ * LCP: заголовок героя — это и есть LCP-элемент, а анимация с fill both
+ * держит слова прозрачными до своего старта. Поэтому анимируются только
+ * первые KINETIC_LIMIT слов; остальные показываются сразу, иначе длинный
+ * заголовок отодвигает отрисовку текста на несколько сотен миллисекунд
+ * (правило excessive-motion: 1–2 анимированных элемента на экран).
  */
+const KINETIC_LIMIT = 6;
+
 export function KineticTitle({
   text,
   accent,
@@ -35,14 +43,20 @@ export function KineticTitle({
           index >= accentStart &&
           index < accentStart + accentWords.length;
         const isLast = index === words.length - 1;
+        const isAnimated = index < KINETIC_LIMIT;
+
+        const classNames = [isAnimated ? "kinetic-word" : "kinetic-word-still"];
+        if (isAccent) classNames.push("kinetic-accent");
 
         return (
           <span
             key={`${word}-${index}`}
-            className={
-              isAccent ? "kinetic-word kinetic-accent" : "kinetic-word"
+            className={classNames.join(" ")}
+            style={
+              isAnimated
+                ? ({ "--word-index": index } as React.CSSProperties)
+                : undefined
             }
-            style={{ "--word-index": index } as React.CSSProperties}
           >
             {isLast ? word : `${word} `}
           </span>
