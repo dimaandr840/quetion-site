@@ -1,30 +1,42 @@
-import type { Metadata } from "next";
-import { DM_Sans, JetBrains_Mono, Outfit } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
+import { RouteFocus } from "@/components/a11y/RouteFocus";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { siteSchema } from "@/lib/schema";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import { themeInitScript } from "@/lib/theme";
 import "@/styles/globals.css";
 
-const outfit = Outfit({
-  subsets: ["latin", "latin-ext"],
-  weight: ["600", "700", "800"],
-  variable: "--font-outfit",
+/**
+ * Шрифты. Сайт полностью на русском (lang="ru"), поэтому кириллический
+ * сабсет обязателен: без него браузер отдаёт кириллицу системному фолбэку,
+ * а next/font считает шрифт загруженным — отсюда рассинхрон метрик и CLS.
+ *
+ * Outfit заменён на Manrope: у Outfit кириллицы нет в принципе, то есть весь
+ * русский текст в заголовках рендерился не тем шрифтом, который заявлен в
+ * дизайн-системе. DM Sans заменён на Inter по той же причине.
+ *
+ * Все три — variable-шрифты, поэтому weight не указываем: подгружается одна
+ * вариативная ось вместо набора статических файлов.
+ */
+const display = Manrope({
+  subsets: ["cyrillic", "latin"],
+  variable: "--font-display",
   display: "swap",
 });
 
-const dmSans = DM_Sans({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-dm-sans",
+const sans = Inter({
+  subsets: ["cyrillic", "latin"],
+  variable: "--font-sans",
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
-  variable: "--font-jetbrains-mono",
+/** Моно нужен только для кода ниже первого экрана — preload снят. */
+const mono = JetBrains_Mono({
+  subsets: ["cyrillic", "latin"],
+  variable: "--font-mono",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -57,6 +69,18 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * theme-color задаём отдельно для светлой и тёмной схемы: иначе адресная
+ * строка мобильного браузера остаётся светлой при тёмной теме сайта.
+ */
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -67,7 +91,7 @@ export default function RootLayout({
       lang="ru"
       data-theme="light"
       data-scroll-behavior="smooth"
-      className={`${outfit.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
+      className={`${display.variable} ${sans.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -78,6 +102,8 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Перейти к содержанию
         </a>
+        {/* Переносит фокус в <main> после смены маршрута. */}
+        <RouteFocus />
         {children}
       </body>
     </html>
