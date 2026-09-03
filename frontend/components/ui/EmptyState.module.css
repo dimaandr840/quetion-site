@@ -8,10 +8,12 @@
   padding: var(--space-48) var(--space-24);
   background: var(--surface);
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-16);
+  /* SHAPE CONSISTENCY LOCK: поверхность → --radius-surface (было --radius-16). */
+  border-radius: var(--radius-surface);
 }
 
-.emoji {
+/* Носитель смысла заглушки: иконка или (устаревшее) эмодзи. */
+.media {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -20,23 +22,35 @@
   align-items: center;
   justify-content: center;
   font-size: 24px;
+  color: var(--text-muted);
 }
 
-.emojiLarge {
+.mediaLarge {
   width: 64px;
   height: 64px;
   font-size: 28px;
 }
 
+/* Старые имена классов сохранены: на них могли ссылаться внешние правила. */
+.emoji {
+  composes: media;
+}
+
+.emojiLarge {
+  composes: mediaLarge;
+}
+
 .title {
   font-family: var(--font-outfit), system-ui, sans-serif;
-  font-size: 20px;
+  /* Fluid-шкала вместо фиксированных 20px — как у остальных заголовков. */
+  font-size: var(--step-h4);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .text {
-  max-width: 480px;
+  /* 65ch — предел комфортной длины строки; 480px обрезал текст произвольно. */
+  max-width: 52ch;
   font-size: 14px;
   line-height: 1.7;
   color: var(--text-secondary);

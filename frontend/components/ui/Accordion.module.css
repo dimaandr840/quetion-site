@@ -7,7 +7,10 @@
 .item {
   background: var(--surface);
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-12);
+  /* SHAPE CONSISTENCY LOCK: карточка — это поверхность, значит --radius-surface.
+     Было --radius-12, из-за чего карточки аккордеона отличались на 2px от
+     соседних карточек каталога. */
+  border-radius: var(--radius-surface);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
@@ -16,8 +19,19 @@
   border-color: var(--accent-soft-border);
 }
 
+/* Заголовок не должен создавать собственный блок: кнопка остаётся прямым
+   ребёнком карточки. Было инлайновым style в TSX. */
+.heading {
+  display: contents;
+  margin: 0;
+  font: inherit;
+}
+
 .trigger {
   width: 100%;
+  /* Правило проекта: тач-таргет ≥ 44px. 56px даёт запас под две строки
+     заголовка на узком экране. */
+  min-height: 56px;
   display: flex;
   align-items: center;
   gap: var(--space-16);
@@ -29,12 +43,17 @@
   font-family: inherit;
 }
 
+.trigger:hover .title {
+  color: var(--accent);
+}
+
 .title {
   flex: 1;
   font-family: var(--font-outfit), system-ui, sans-serif;
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
+  transition: color 0.16s ease;
 }
 
 .body {
@@ -42,6 +61,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
+}
+
+/* Обязательно: display: flex у .body сильнее браузерного [hidden],
+   без этого закрытая панель осталась бы видимой. */
+.body[hidden] {
+  display: none;
 }
 
 .snippet {
@@ -65,4 +90,10 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title {
+    transition: none;
+  }
 }
