@@ -6,7 +6,9 @@
 }
 
 .line {
-  border-radius: var(--radius-8);
+  /* SHAPE CONSISTENCY LOCK: скелетон повторяет форму того, что подменяет,
+     то есть поверхность. */
+  border-radius: var(--radius-surface);
   background: linear-gradient(
     90deg,
     var(--surface-muted) 0%,
@@ -37,5 +39,15 @@
   }
   100% {
     background-position: -200% 0;
+  }
+}
+
+/* Бесконечная анимация — первое, что нужно выключить по просьбе пользователя.
+   Скелетон остаётся видимым: он несёт информацию о структуре, а не только
+   о том, что «что-то грузится». */
+@media (prefers-reduced-motion: reduce) {
+  .line {
+    animation: none;
+    background: var(--surface-muted);
   }
 }
