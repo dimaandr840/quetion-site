@@ -32,7 +32,16 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
 
 const GTAG_ORIGIN = "https://www.googletagmanager.com";
 
-type WindowWithFlags = Window & Record<string, unknown>;
+/**
+ * Window не имеет индексной подписи, поэтому пересечение с Record<string, unknown>
+ * несовместимо с Window & typeof globalThis напрямую (TS2352). Пишем флаги
+ * ga-disable-* через отдельный хелпер с приведением через unknown — это
+ * единственное место, где нужен «динамический» доступ к window.
+ */
+function setGaDisableFlag(gaId: string, disabled: boolean): void {
+  (window as unknown as Record<string, unknown>)[`ga-disable-${gaId}`] =
+    disabled;
+}
 
 /** Удаляем cookie Google на всех вариантах домена: точный нам не известен. */
 function dropAnalyticsCookies(): void {
@@ -62,7 +71,7 @@ export function GoogleAnalytics() {
 
   const revoke = useCallback(() => {
     if (!GA_ID) return;
-    (window as WindowWithFlags)[`ga-disable-${GA_ID}`] = true;
+    setGaDisableFlag(GA_ID, true);
     dropAnalyticsCookies();
   }, []);
 
@@ -76,7 +85,7 @@ export function GoogleAnalytics() {
       const state = (event as CustomEvent<ConsentState>).detail;
 
       if (state?.analytics === true) {
-        (window as WindowWithFlags)[`ga-disable-${GA_ID}`] = false;
+        setGaDisableFlag(GA_ID, false);
         setGranted(true);
         return;
       }
