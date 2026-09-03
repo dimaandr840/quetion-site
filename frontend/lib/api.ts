@@ -7,6 +7,8 @@
  * мы возвращаем её значение в заголовке `X-XSRF-TOKEN`.
  */
 
+import { notifySessionExpired } from "./session-recovery";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 const CSRF_COOKIE = "XSRF-TOKEN";
@@ -86,6 +88,17 @@ interface ProblemDetail {
   retryAfterSeconds?: number;
 }
 
+/** Сколько ждать до повтора, с учётом стандартного заголовка Retry-After. */
+function retryAfterFrom(response: Response, problem: ProblemDetail): number | undefined {
+  if (typeof problem.retryAfterSeconds === "number") {
+    return problem.retryAfterSeconds;
+  }
+  const header = response.headers.get("Retry-After");
+  if (!header) return undefined;
+  const seconds = Number.parseInt(header, 10);
+  return Number.isFinite(seconds) ? seconds : undefined;
+}
+
 async function toApiError(response: Response): Promise<ApiError> {
   let problem: ProblemDetail = {};
   try {
@@ -98,7 +111,7 @@ async function toApiError(response: Response): Promise<ApiError> {
     problem.detail || problem.title || `Ошибка запроса (${response.status})`;
   return new ApiError(response.status, message, {
     detail: problem.detail,
-    retryAfterSeconds: problem.retryAfterSeconds,
+    retryAfterSeconds: retryAfterFrom(response, problem),
   });
 }
 
@@ -133,6 +146,15 @@ export async function apiFetch<T>(
     cache: "no-store",
   });
 
+  // Истечение сессии посреди работы — не рядовая ошибка формы: без отдельного
+  // сигнала интерфейс показывал бы «Ошибка запроса (401)» и терял введённый текст.
+  if (response.status === 401 && typeof window !== "undefined") {
+    notifySessionExpired({
+      path,
+      returnTo: `${window.location.pathname}${window.location.search}`,
+    });
+  }
+
   if (!response.ok) {
     throw await toApiError(response);
   }
@@ -159,4 +181,17 @@ export async function apiUpload<T>(
   formData: FormData
 ): Promise<T> {
   return apiFetch<T>(path, { method: "POST", body: formData });
+}
+
+/** Человеческий текст для 429/503 с retryAfterSeconds. */
+export function retryAfterMessage(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.retryAfterSeconds === undefined) {
+    return null;
+  }
+  const seconds = Math.max(1, Math.ceil(error.retryAfterSeconds));
+  if (seconds < 60) {
+    return `Повторите попытку через ${seconds} сек.`;
+  }
+  const minutes = Math.ceil(seconds / 60);
+  return `Повторите попытку через ${minutes} мин.`;
 }
