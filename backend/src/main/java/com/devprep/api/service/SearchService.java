@@ -2,10 +2,12 @@ package com.devprep.api.service;
 
 import com.devprep.api.domain.Level;
 import com.devprep.api.domain.Question;
+import com.devprep.api.observability.IntegrationStatusService;
 import com.devprep.api.repository.ProfessionRepository;
 import com.devprep.api.repository.QuestionRepository;
 import com.devprep.api.repository.QuestionSpecifications;
 import com.devprep.api.search.MeilisearchService;
+import com.devprep.api.search.SearchProperties;
 import com.devprep.api.web.dto.QuestionSummaryDto;
 import com.devprep.api.web.dto.SearchResponseDto;
 import com.devprep.api.web.dto.SearchResponseDto.ProfessionFacetDto;
@@ -25,6 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Повторяет searchQuestions/countByLevel/professionCountsFor из lib/queries.ts.
  * Основной путь — Meilisearch (опечатки + фасеты), фолбэк — ILIKE по базе.
+ *
+ * <p>Падение индекса не является ошибкой запроса: поиск обязан ответить 200 в упрощённом
+ * режиме. Пятисотка здесь стоит дороже худшего ранжирования: на странице поиска она
+ * выглядит как полностью упавший сайт.
  */
 @Slf4j
 @Service
@@ -32,53 +38,137 @@ import org.springframework.transaction.annotation.Transactional;
 public class SearchService {
 
     private static final Locale RU = Locale.forLanguageTag("ru");
+
+    /** Сколько документов минимум забираем из индекса ради фасетов по всей выдаче. */
     private static final int MAX_HITS = 200;
+
+    public static final String MODE_INDEX = "index";
+    public static final String MODE_DATABASE = "database";
+    public static final String MODE_FALLBACK = "fallback";
+    public static final String MODE_DEEP_PAGE = "deep-page";
 
     private final QuestionRepository questionRepository;
     private final ProfessionRepository professionRepository;
     private final ContentMapper mapper;
     private final Optional<MeilisearchService> meilisearch;
+    private final SearchProperties properties;
+    private final IntegrationStatusService status;
 
     public SearchService(
             QuestionRepository questionRepository,
             ProfessionRepository professionRepository,
             ContentMapper mapper,
-            Optional<MeilisearchService> meilisearch) {
+            Optional<MeilisearchService> meilisearch,
+            SearchProperties properties,
+            IntegrationStatusService status) {
         this.questionRepository = questionRepository;
         this.professionRepository = professionRepository;
         this.mapper = mapper;
         this.meilisearch = meilisearch;
+        this.properties = properties;
+        this.status = status;
     }
 
     public SearchResponseDto search(String query, Set<Level> levels, Set<String> professionSlugs) {
+        return search(query, levels, professionSlugs, 0, properties.getPageSize());
+    }
+
+    public SearchResponseDto search(
+            String query,
+            Set<Level> levels,
+            Set<String> professionSlugs,
+            int pageParam,
+            int sizeParam) {
         String normalized = query == null ? "" : query.trim();
+        int size = normalizeSize(sizeParam);
+        int page = Math.max(0, pageParam);
+        long offset = (long) page * size;
+
+        // Meilisearch отдаёт не больше maxTotalHits документов и за этой границей молча
+        // возвращает пустую страницу вместо ошибки. Глубокую пагинацию обслуживает база.
+        boolean deepPage = offset + size > properties.getMaxTotalHits();
+        boolean indexConfigured = !normalized.isBlank() && meilisearch.isPresent();
 
         List<Question> hits = null;
-        boolean fromIndex = false;
+        String mode = MODE_DATABASE;
+        boolean degraded = false;
 
-        if (!normalized.isBlank() && meilisearch.isPresent() && meilisearch.get().isHealthy()) {
-            try {
-                MeilisearchService.MeiliHits result =
-                        meilisearch.get().search(normalized, levels, professionSlugs, MAX_HITS);
-                hits = orderedBySlug(result.slugs());
-                fromIndex = true;
-            } catch (RuntimeException e) {
-                log.warn("Meilisearch: поиск не удался, используем базу. {}", e.getMessage());
+        if (indexConfigured && !deepPage) {
+            if (indexKnownDown()) {
+                degraded = true;
+            } else {
+                try {
+                    int limit =
+                            (int)
+                                    Math.min(
+                                            properties.getMaxTotalHits(),
+                                            Math.max(MAX_HITS, offset + size));
+                    MeilisearchService.MeiliHits result =
+                            meilisearch.get().search(normalized, levels, professionSlugs, limit);
+                    hits = orderedBySlug(result.slugs());
+                    mode = MODE_INDEX;
+                    status.searchUp();
+                    status.searchServedFromIndex();
+                } catch (RuntimeException e) {
+                    log.warn("Meilisearch: поиск не удался, используем базу. {}", e.getMessage());
+                    status.searchDown(e.getClass().getSimpleName());
+                    degraded = true;
+                }
             }
         }
 
         if (hits == null) {
             hits = fallback(normalized, levels, professionSlugs);
+            mode =
+                    degraded
+                            ? MODE_FALLBACK
+                            : (indexConfigured && deepPage ? MODE_DEEP_PAGE : MODE_DATABASE);
+            status.searchServedFromFallback();
         }
 
-        List<QuestionSummaryDto> items = hits.stream().map(mapper::toSummary).toList();
+        // Фасеты считаем по всей выдаче, а не по странице: иначе счётчики фильтров
+        // меняются при листании и выглядят сломанными.
+        Map<Level, Long> levelCounts = countByLevel(hits);
+        List<ProfessionFacetDto> professionCounts = professionCountsFor(hits);
+
+        List<QuestionSummaryDto> items =
+                pageOf(hits, offset, size).stream().map(mapper::toSummary).toList();
         return new SearchResponseDto(
                 normalized,
-                items.size(),
+                hits.size(),
+                page,
+                size,
                 items,
-                countByLevel(hits),
-                professionCountsFor(hits),
-                fromIndex);
+                levelCounts,
+                professionCounts,
+                MODE_INDEX.equals(mode),
+                mode,
+                degraded);
+    }
+
+    /**
+     * Фоновый пробник уже знает, что индекс лежит — не тратим таймаут на каждый запрос
+     * пользователя. Именно ожидание таймаута превращает падение поиска в деградацию всего
+     * сайта.
+     */
+    private boolean indexKnownDown() {
+        return status.searchStatus().state() == IntegrationStatusService.State.DOWN;
+    }
+
+    private int normalizeSize(int requested) {
+        if (requested <= 0) {
+            return properties.getPageSize();
+        }
+        return Math.min(requested, properties.getMaxPageSize());
+    }
+
+    private static List<Question> pageOf(List<Question> all, long offset, int size) {
+        if (offset >= all.size()) {
+            return List.of();
+        }
+        int from = (int) offset;
+        int to = (int) Math.min(all.size(), offset + size);
+        return all.subList(from, to);
     }
 
     /**

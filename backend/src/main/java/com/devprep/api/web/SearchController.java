@@ -13,7 +13,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Поиск с фасетами: {@code /api/search?q=hashmap&level=Junior&profession=java}. */
+/**
+ * Поиск с фасетами и пагинацией:
+ * {@code /api/search?q=hashmap&level=Junior&profession=java&page=0&size=20}.
+ *
+ * <p>Отрицательные и абсурдно большие page/size не отвергаются ошибкой, а нормализуются
+ * в сервисе: строка запроса — публичный ввод, и 400 на {@code ?page=-1} только добавляет
+ * шума в мониторинг.
+ */
 @RestController
 @RequestMapping("/api/search")
 @RequiredArgsConstructor
@@ -25,8 +32,10 @@ public class SearchController {
     public SearchResponseDto search(
             @RequestParam(name = "q", required = false, defaultValue = "") String query,
             @RequestParam(name = "level", required = false) List<String> levels,
-            @RequestParam(name = "profession", required = false) List<String> professions) {
-        return searchService.search(query, parseLevels(levels), toSet(professions));
+            @RequestParam(name = "profession", required = false) List<String> professions,
+            @RequestParam(name = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(name = "size", required = false, defaultValue = "0") int size) {
+        return searchService.search(query, parseLevels(levels), toSet(professions), page, size);
     }
 
     private static Set<Level> parseLevels(List<String> raw) {
