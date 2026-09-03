@@ -1,0 +1,66 @@
+# Уведомления идут в Telegram и на почту. Секреты в этом файле не хранятся:
+# токен бота читается из файла, который монтируется отдельно
+# (docker-compose.observability.yml → alertmanager.secrets), а SMTP-пароль
+# подставляется из того же .env, что и у бэкенда.
+global:
+  resolve_timeout: 5m
+  smtp_from: "${ALERT_MAIL_FROM}"
+  smtp_smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+  smtp_auth_username: "${SMTP_USERNAME}"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+  smtp_require_tls: true
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+route:
+  receiver: default
+  # Группировка по alertname+severity: падение зависимости обычно поднимает
+  # сразу несколько правил, и без группировки в чат уходит серия сообщений.
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: critical
+      # Критичное повторяем чаще: 4 часа тишины по недоступности — это инцидент,
+      # о котором забыли.
+      repeat_interval: 1h
+    - matchers: ['severity="warning"']
+      receiver: default
+
+inhibit_rules:
+  # Пока API лежит целиком, отдельные алерты про latency и пул только шумят.
+  - source_matchers: ['alertname="ApiDown"']
+    target_matchers: ['severity=~"warning|critical"']
+    equal: ["job"]
+
+receivers:
+  - name: default
+    telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id: ${ALERT_TELEGRAM_CHAT_ID}
+        api_url: https://api.telegram.org
+        parse_mode: HTML
+        message: |
+          <b>{{ .Status | toUpper }}</b> {{ .CommonLabels.alertname }}
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+
+  - name: critical
+    telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id: ${ALERT_TELEGRAM_CHAT_ID}
+        parse_mode: HTML
+        message: |
+          🔴 <b>{{ .CommonLabels.alertname }}</b>
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+    email_configs:
+      - to: "${ALERT_MAIL_TO}"
+        send_resolved: true
+        headers:
+          Subject: "[DevPrep] {{ .CommonLabels.alertname }}"
