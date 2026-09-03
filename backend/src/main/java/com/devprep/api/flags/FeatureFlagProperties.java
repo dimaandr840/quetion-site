@@ -22,6 +22,9 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "devprep.flags")
 public class FeatureFlagProperties {
 
+    /** Выключатель всего слоя: при false используются только значения из defaults. */
+    private boolean enabled = true;
+
     /** Как часто перечитывать таблицу. Компромисс между скоростью раскатки и нагрузкой. */
     private Duration cacheTtl = Duration.ofSeconds(15);
 

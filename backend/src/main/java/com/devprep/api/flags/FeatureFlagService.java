@@ -1,7 +1,9 @@
 package com.devprep.api.flags;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +48,10 @@ public class FeatureFlagService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void bootstrap() {
+        if (!properties.isEnabled()) {
+            log.info("Слой фичефлагов выключен, используются значения devprep.flags.defaults");
+            return;
+        }
         seedDefaults();
         refresh();
     }
@@ -75,10 +81,14 @@ public class FeatureFlagService {
 
     @Scheduled(fixedDelayString = "${devprep.flags.cache-ttl:PT15S}")
     public void refresh() {
+        if (!properties.isEnabled()) {
+            return;
+        }
         try {
             Map<String, FlagValue> loaded = new LinkedHashMap<>();
             for (FeatureFlag flag : repository.findAll()) {
-                loaded.put(flag.getKey(), new FlagValue(flag.isEnabled(), flag.getRolloutPercentage()));
+                loaded.put(
+                        flag.getKey(), new FlagValue(flag.isEnabled(), flag.getRolloutPercentage()));
             }
             cache = Map.copyOf(loaded);
             loadedAt = Instant.now();
@@ -86,7 +96,8 @@ public class FeatureFlagService {
         catch (RuntimeException ex) {
             // Старый снимок лучше пустого: иначе кратковременный сбой базы массово
             // выключит функциональность у всех пользователей сразу.
-            log.warn("Не удалось обновить кэш фичефлагов, используем предыдущий снимок: {}",
+            log.warn(
+                    "Не удалось обновить кэш фичефлагов, используем предыдущий снимок: {}",
                     ex.getClass().getSimpleName());
         }
     }
@@ -97,7 +108,7 @@ public class FeatureFlagService {
      */
     public boolean isEnabled(String rawKey, String discriminator) {
         String key = normalize(rawKey);
-        FlagValue value = cache.get(key);
+        FlagValue value = properties.isEnabled() ? cache.get(key) : null;
         if (value == null) {
             return Boolean.TRUE.equals(properties.getDefaults().get(key));
         }
@@ -127,24 +138,32 @@ public class FeatureFlagService {
 
     public List<FeatureFlag> listAll() {
         List<FeatureFlag> flags = new ArrayList<>(repository.findAll());
-        flags.sort((left, right) -> left.getKey().compareTo(right.getKey()));
+        flags.sort(Comparator.comparing(FeatureFlag::getKey));
         return flags;
     }
 
     /** Упсерт: администратор может создать новый ключ без миграции и деплоя. */
     public FeatureFlag update(
-            String rawKey, Boolean enabled, Integer rolloutPercentage, String description, String actor) {
+            String rawKey,
+            Boolean enabled,
+            Integer rolloutPercentage,
+            String description,
+            String actor) {
         String key = normalize(rawKey);
-        FeatureFlag flag = repository.findById(key).orElseGet(() -> {
-            FeatureFlag created = new FeatureFlag();
-            created.setKey(key);
-            return created;
-        });
+        FeatureFlag flag =
+                repository
+                        .findById(key)
+                        .orElseGet(
+                                () -> {
+                                    FeatureFlag created = new FeatureFlag();
+                                    created.setKey(key);
+                                    return created;
+                                });
         if (enabled != null) {
             flag.setEnabled(enabled);
         }
         if (rolloutPercentage != null) {
-            flag.setRolloutPercentage(Math.clamp(rolloutPercentage, 0, 100));
+            flag.setRolloutPercentage(Math.min(100, Math.max(0, rolloutPercentage)));
         }
         if (description != null) {
             flag.setDescription(description);
