@@ -6,6 +6,9 @@ import { siteSchema } from "@/lib/schema";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import { themeInitScript } from "@/lib/theme";
 import "@/styles/globals.css";
+/* Слой 4 подключается после globals.css: он переопределяет тени, фактуру фона
+   и обводку фокуса, поэтому порядок импорта здесь значим. */
+import "@/styles/quiet.css";
 
 /**
  * Шрифты. Сайт полностью на русском (lang="ru"), поэтому кириллический

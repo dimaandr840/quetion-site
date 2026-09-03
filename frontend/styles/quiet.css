@@ -1,0 +1,157 @@
+/* ============================================================================
+   Слой 4 — тихий минимализм (Linear / Vercel).
+
+   Направление согласовано с владельцем проекта: тот же визуальный мир и те же
+   токены слоёв 1–3, но спокойнее. Правки только по трём осям:
+
+   1. ГЛУБИНА ЖИВЁТ НА ГРАНИЦАХ, А НЕ НА ТЕНЯХ. Тени приглушены до уровня,
+      на котором карточка отделяется от фона, но не «наклеена» на него.
+   2. ДЕКОР ПРИГЛУШЁН. Точечная сетка и акцентное свечение на главной больше
+      не соревнуются с текстом за внимание.
+   3. БРАУЗЕРНЫЕ ПОВЕРХНОСТИ ТЕМАТИЗИРОВАНЫ. Выделение текста, каретка,
+      скроллбары, обводка фокуса и подчёркивание ссылок до этого приходили из
+      дефолтов браузера и не принадлежали дизайн-системе.
+
+   Файл подключается ПОСЛЕ globals.css (см. app/layout.tsx), поэтому здесь
+   допустимы переопределения токенов и базовых правил.
+   ========================================================================== */
+
+:root {
+  /* Обводка фокуса — теперь токен, а не число в globals.css. */
+  --ring: var(--accent);
+  --ring-width: 2px;
+  --ring-offset: 2px;
+
+  /* Браузерные поверхности. */
+  --selection-bg: var(--indigo-100);
+  --selection-fg: var(--slate-900);
+  --caret: var(--accent);
+  --scrollbar-thumb: var(--slate-300);
+  --scrollbar-thumb-hover: var(--slate-400);
+  --scrollbar-track: transparent;
+  --underline-color: rgba(15, 23, 42, 0.35);
+  --underline-offset: 0.18em;
+  --underline-thickness: 1px;
+
+  /* Тени тише: смещение + мягкое размытие сохранены, плотность снижена. */
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-tint) / 0.04);
+  --shadow-md: 0 1px 2px rgb(var(--shadow-tint) / 0.03),
+    0 6px 16px -10px rgb(var(--shadow-tint) / 0.08);
+  --shadow-lg: 0 1px 2px rgb(var(--shadow-tint) / 0.03),
+    0 14px 32px -18px rgb(var(--shadow-tint) / 0.12);
+  --shadow-accent: 0 10px 24px -16px rgba(79, 70, 229, 0.3);
+
+  /* Фактура фона перестаёт быть заметной деталью. */
+  --glow-accent: rgba(99, 102, 241, 0.1);
+  --grid-line: rgba(15, 23, 42, 0.038);
+}
+
+[data-theme="dark"] {
+  --selection-bg: rgba(129, 140, 248, 0.32);
+  --selection-fg: #f8fafc;
+  --scrollbar-thumb: var(--slate-600);
+  --scrollbar-thumb-hover: var(--slate-500);
+  --underline-color: rgba(248, 250, 252, 0.38);
+
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-tint) / 0.45);
+  --shadow-md: 0 1px 2px rgb(var(--shadow-tint) / 0.4),
+    0 6px 16px -10px rgb(var(--shadow-tint) / 0.5);
+  --shadow-lg: 0 1px 2px rgb(var(--shadow-tint) / 0.4),
+    0 14px 32px -18px rgb(var(--shadow-tint) / 0.6);
+  --shadow-accent: 0 10px 24px -16px rgba(129, 140, 248, 0.32);
+
+  --glow-accent: rgba(129, 140, 248, 0.14);
+  --grid-line: rgba(255, 255, 255, 0.038);
+}
+
+/* ---- Фокус: одна декларация на проект, теперь из токенов ---- */
+
+:focus-visible {
+  outline: var(--ring-width) solid var(--ring);
+  outline-offset: var(--ring-offset);
+  /* Зазор цветом поверхности: индикатор читается и на акцентной заливке. */
+  box-shadow: 0 0 0 var(--ring-offset) var(--surface);
+}
+
+/* ---- Выделение текста и каретка ---- */
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  caret-color: var(--caret);
+}
+
+/* ---- Скроллбары ---- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+/* ---- Ссылки в прозе ----
+   Только ссылки без собственного класса: кнопки, пилюли и карточки-ссылки
+   свою типографику определяют сами. */
+
+a[href]:not([class]) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--underline-color);
+  text-decoration-thickness: var(--underline-thickness);
+  text-underline-offset: var(--underline-offset);
+  transition: text-decoration-color var(--dur-base, 0.18s) ease,
+    color var(--dur-base, 0.18s) ease;
+}
+
+a[href]:not([class]):hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+
+/* ---- Мелочи, которые ломают вёрстку на мобильных ---- */
+
+img,
+video,
+svg {
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+/* Цифры в метриках и таблицах не должны дёргать колонку при смене значения. */
+dt,
+td,
+th,
+time,
+data {
+  font-variant-numeric: tabular-nums;
+}

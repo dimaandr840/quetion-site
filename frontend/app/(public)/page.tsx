@@ -12,7 +12,6 @@ import { popularTags, questionPath, topicPills } from "@/lib/queries";
 import { ButtonLink } from "@/components/ui/Button";
 import { CardGrid, ProfessionCard, QuestionCard } from "@/components/ui/Cards";
 import { Icon } from "@/components/ui/Icon";
-import { KineticTitle } from "@/components/ui/KineticTitle";
 import { Pill } from "@/components/ui/Tag";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SpotlightScope } from "@/components/ui/SpotlightScope";
@@ -52,15 +51,17 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* HERO — асимметричный сплит вместо центрированного героя над градиентным
-          мешем. Слева текст и поиск, справа — превью реальных компонентов, а не
-          нарисованный «скриншот» из div-ов. */}
+      {/* HERO — асимметричный сплит: слева текст и поиск, справа превью
+          реальных компонентов, а не нарисованный «скриншот» из div-ов.
+
+          Слой 4 (тихий минимализм): убраны надзаголовок-kicker над h1,
+          покадровая анимация заголовка и магнитная кнопка. Первый экран
+          держится на типографике и одном действии, а не на эффектах. */}
       <div className={styles.heroWrap}>
         <section className={`shell ${styles.hero}`}>
           <div className={`stagger ${styles.heroCopy}`}>
-            <p className="overline animate-in">{HERO.overline}</p>
-            <h1 className={`display-large ${styles.heroTitle}`}>
-              <KineticTitle text={HERO.title} accent="успешного собеседования" />
+            <h1 className={`display-large animate-in ${styles.heroTitle}`}>
+              {HERO.title}
             </h1>
             <p className={`body-large animate-in ${styles.heroSubtitle}`}>
               {HERO.subtitle}
@@ -73,11 +74,7 @@ export default async function HomePage() {
             {/* В герое остаётся одно действие: вторая ссылка вела на рассказ о
                 устройстве проекта и отвлекала от поиска вопросов. */}
             <div className={`animate-in ${styles.heroActions}`}>
-              <ButtonLink
-                href={HERO.primaryCta.href}
-                size="large"
-                className="magnetic"
-              >
+              <ButtonLink href={HERO.primaryCta.href} size="large">
                 {HERO.primaryCta.label}
               </ButtonLink>
             </div>

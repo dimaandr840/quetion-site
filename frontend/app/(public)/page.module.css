@@ -1,15 +1,19 @@
 /* ============================================================================
    Главная страница.
 
-   Аудит по taste-skill выявил три «AI-tell», исправленные здесь:
-   1. Центрированный герой поверх двух плавающих градиентных пятен →
-      асимметричный сплит, один источник света и точечная сетка.
-   2. Семь текстовых блоков в герое → ровно четыре; цифры и пилюли
-      вынесены в отдельную полосу ниже.
-   3. Повтор одного семейства лэйаута → пять разных: сплит, полоса
-      цифр, сетка карточек, вертикальный список, горизонтальный rail.
+   Пять семейств лэйаута сохранены: сплит, полоса цифр, сетка карточек,
+   вертикальный список, горизонтальный rail.
 
-   Диалы: DESIGN_VARIANCE 7 / MOTION 5 / DENSITY 5.
+   Слой 4 — тихий минимализм (Linear / Vercel), согласовано с владельцем:
+   1. Убрано декоративное свечение-блоб за героем; фактуру держит только
+      затухающая точечная сетка на приглушённом --grid-line.
+   2. Убрана градиентная планка перед h2: иерархия секций держится на
+      размере и весе текста, а не на цветной полосе слева.
+   3. Колода карточек больше не повёрнута: остаётся один спокойный сдвиг
+      по глубине, который выравнивается при hover и focus.
+   4. Удалены неиспользуемые классы .heroLink и .sectionHint.
+
+   Диалы: DESIGN_VARIANCE 5 / MOTION 3 / DENSITY 5.
    ========================================================================== */
 
 .heroWrap {
@@ -18,7 +22,8 @@
   isolation: isolate;
 }
 
-/* Фактура фона: точечная сетка, затухающая к низу. */
+/* Фактура фона: точечная сетка, затухающая к низу. Единственный декор
+   первого экрана. */
 .heroWrap::before {
   content: "";
   position: absolute;
@@ -26,24 +31,8 @@
   z-index: -2;
   background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
   background-size: var(--grid-size) var(--grid-size);
-  mask-image: linear-gradient(180deg, #000 0%, transparent 82%);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 82%);
-  pointer-events: none;
-}
-
-/* Одно свечение, смещённое влево-вверх: свет идёт из одного источника
-   и никуда не плывёт без причины. */
-.heroWrap::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  top: -240px;
-  left: -120px;
-  width: 720px;
-  height: 560px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--glow-accent) 0%, transparent 68%);
-  filter: blur(60px);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
   pointer-events: none;
 }
 
@@ -85,27 +74,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-24);
-}
-
-/* Вторичное действие — текстовая ссылка, а не вторая равновесная кнопка. */
-.heroLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  transition: var(--transition-colors), gap var(--dur-base) var(--ease-out);
-}
-
-.heroLink svg {
-  transition: transform var(--dur-base) var(--ease-out);
-}
-
-.heroLink:hover {
-  color: var(--accent);
-  gap: 10px;
+  gap: var(--space-16);
 }
 
 /* ---------- Колода реальных карточек ----------
@@ -120,9 +89,9 @@
 
 .deckLabel {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -136,16 +105,20 @@
   gap: var(--space-12);
 }
 
+/* Один спокойный сдвиг по глубине вместо поворота на 0.85deg. */
 .deckItem {
   transform-origin: left center;
-  transform: rotate(calc((var(--card-index) - 1) * 0.85deg))
-    translate3d(calc(var(--card-index) * 10px), 0, 0);
-  transition: transform var(--dur-slow) var(--ease-magnetic),
+  transform: translate3d(calc(var(--card-index) * 8px), 0, 0);
+  transition: transform var(--dur-slow) var(--ease-out),
     opacity var(--dur-slow) var(--ease-out);
 }
 
+.deckItem:nth-child(2) {
+  opacity: 0.88;
+}
+
 .deckItem:nth-child(3) {
-  opacity: 0.72;
+  opacity: 0.7;
 }
 
 @media (hover: hover) {
@@ -205,7 +178,7 @@
 
 .factLabel {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -218,7 +191,7 @@
 }
 
 .popularLabel {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   margin-right: 4px;
 }
@@ -229,48 +202,30 @@
   padding-block: var(--space-64);
 }
 
+/* Над заголовком секции воздуха больше, чем под ним. */
 .sectionHead {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-24);
-  margin-bottom: var(--space-32);
+  margin-bottom: var(--space-24);
 }
 
 .sectionTitle {
   margin: 0;
-  position: relative;
-  padding-left: var(--space-16);
-}
-
-.sectionTitle::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.15em;
-  bottom: 0.15em;
-  width: 4px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, var(--accent) 0%, var(--indigo-400) 100%);
 }
 
 .sectionSubtitle {
   margin: 6px 0 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--text-secondary);
-}
-
-.sectionHint {
-  font-size: 13px;
-  color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .sectionLink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--accent);
   white-space: nowrap;
@@ -345,7 +300,15 @@
   }
 
   .heroActions {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+    width: 100%;
+  }
+
+  /* Главное действие на телефоне занимает всю ширину — палец попадает
+     в цель без прицеливания. */
+  .heroActions > * {
+    width: 100%;
+    justify-content: center;
   }
 }
