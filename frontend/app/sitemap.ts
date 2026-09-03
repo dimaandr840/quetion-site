@@ -35,12 +35,15 @@ function lastModified(entity: unknown): { lastModified?: Date } {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // /privacy больше не страница, а редирект на /legal/privacy: адреса со
+  // статусом 301 в sitemap держать нельзя.
   const staticPaths = [
     "/",
     "/professions",
     "/questions",
     "/categories",
-    "/privacy",
+    "/legal/privacy",
+    "/legal/cookies",
   ];
 
   const [professions, categories, questions] = await Promise.all([
