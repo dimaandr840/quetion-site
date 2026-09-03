@@ -1,0 +1,138 @@
+# Стек наблюдаемости. Запускается отдельным overlay-файлом:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# Почему отдельно, а не в основном файле: наблюдаемость — это ещё шесть
+# контейнеров и ~1.5 ГБ памяти; на маленькой машине и в CI она не нужна,
+# а приложение обязано подниматься и без неё (трейсы и метрики идут
+# в никуда — экспортёр молча ретрайтит, запросы не страдают).
+#
+# Все UI слушают только 127.0.0.1: в интернет их пускаем только через SSH-туннель.
+name: devprep
+
+x-obs-hardening: &obs-hardening
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  restart: unless-stopped
+
+services:
+  prometheus:
+    <<: *obs-hardening
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 30 дней — окно месячного SLO по доступности.
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  # Alertmanager не умеет подставлять переменные окружения в свой конфиг,
+  # поэтому шаблон рендерится одноразовым контейнером. Класть адреса и
+  # chat_id в git нельзя, а держать две копии конфига — верный способ их разойти.
+  alertmanager-config:
+    image: alpine:3.21
+    command:
+      - sh
+      - -ceu
+      - |
+        apk add --no-cache gettext >/dev/null
+        envsubst < /templates/alertmanager.yml > /rendered/alertmanager.yml
+    environment:
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+      ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-${PASSWORD_RESET_MAIL_FROM:-}}
+      ALERT_MAIL_TO: ${ALERT_MAIL_TO:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    volumes:
+      - ./observability/alertmanager:/templates:ro
+      - alertmanager-config:/rendered
+    restart: "no"
+
+  alertmanager:
+    <<: *obs-hardening
+    image: prom/alertmanager:v0.28.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - alertmanager-config:/etc/alertmanager
+      # Токен бота — файлом, а не в конфиге: так он не попадает ни в git,
+      # ни в вывод amtool config show.
+      - ./observability/alertmanager/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    depends_on:
+      alertmanager-config:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:9093:9093"
+
+  grafana:
+    <<: *obs-hardening
+    image: grafana/grafana:11.5.1
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  loki:
+    <<: *obs-hardening
+    image: grafana/loki:3.4.2
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  promtail:
+    <<: *obs-hardening
+    image: grafana/promtail:3.4.2
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./observability/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      # Только чтение socket'а: promtail ничего не запускает, только читает
+      # список контейнеров и их логи. Доступ к socket'у равен root на хосте —
+      # если это неприемлемо, поставьте docker-socket-proxy.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/tmp
+    depends_on:
+      - loki
+
+  tempo:
+    <<: *obs-hardening
+    image: grafana/tempo:2.7.1
+    command: -config.file=/etc/tempo/tempo.yml
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  alertmanager-config:
+  grafana-data:
+  loki-data:
+  promtail-positions:
+  tempo-data:

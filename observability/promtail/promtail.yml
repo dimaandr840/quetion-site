@@ -1,6 +1,9 @@
 # Promtail читает логи контейнеров через docker socket в режиме только-чтение.
-# Альтернатива — docker-драйвер loki, но он теряет логи при недоступности Loki
-# и ломает docker logs, а также требует установки плагина на хост.
+#
+# Почему не docker-драйвер loki: он требует плагина на хосте, ломает
+# `docker logs` и теряет строки, когда Loki недоступен, — то есть ровно в
+# тот момент, когда логи нужнее всего. Текущая схема: json-file остаётся
+# буфером на диске (10 МБ × 5), promtail догоняет после восстановления.
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
@@ -27,46 +30,48 @@ scrape_configs:
         regex: "/(.*)"
         target_label: container
     pipeline_stages:
-      # docker-драйвер оборачивает строку в {"log":...}; сначала снимаем его.
+      # docker-драйвер оборачивает строку в {"log": ...} — сначала снимаем обёртку.
       - docker: {}
-      # Затем разбираем наш JSON из logback-spring.xml / pino.
-      - json:
-          expressions:
-            level: level
-            logger: logger
-            requestId: requestId
-            userId: userId
-            traceId: traceId
-            spanId: spanId
-      # Метки — только низкокардинальные поля.
-      - labels:
-          level:
-      # request-id и trace-id — в structured metadata: по ним можно фильтровать
-      # без раздувания индекса потоков.
-      - structured_metadata:
-          requestId:
-          traceId:
-          spanId:
-          userId:
-      - timestamp:
-          source: timestamp
-          format: RFC3339Nano
-          action_on_failure: fudge
 
-  # nginx пишет access.log тем же JSON-форматом (см. nginx/nginx.conf),
-  # поэтому на периметре тоже есть request_id для сквозного поиска.
-  - job_name: nginx-access
-    static_configs:
-      - targets: ["localhost"]
-        labels:
-          service: nginx
-          __path__: /var/log/nginx/*.log
-    pipeline_stages:
-      - json:
-          expressions:
-            requestId: request_id
-            status: status
-      - labels:
-          status:
-      - structured_metadata:
-          requestId:
+      # api и web пишут JSON одного формата (см. backend/src/main/resources/
+      # logback-spring.xml и frontend/lib/log.ts).
+      - match:
+          selector: '{service=~"api|web"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  logger: logger
+                  requestId: requestId
+                  userId: userId
+                  traceId: traceId
+                  spanId: spanId
+                  timestamp: timestamp
+            - labels:
+                level:
+            # Корреляционные идентификаторы — в structured metadata, а не в метки:
+            # метка с trace-id создаёт поток на каждый запрос и убивает индекс.
+            - structured_metadata:
+                requestId:
+                traceId:
+                spanId:
+                userId:
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+                action_on_failure: fudge
+
+      # nginx пишет access.log в stdout тем же JSON'ом (log_format json_access).
+      - match:
+          selector: '{service="nginx"}'
+          stages:
+            - json:
+                expressions:
+                  requestId: request_id
+                  status: status
+                  traceId: trace_id
+            - labels:
+                status:
+            - structured_metadata:
+                requestId:
+                traceId:
