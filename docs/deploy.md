@@ -1,112 +1,65 @@
 # Деплой на LuxVPS
 
-Схема: GitHub Actions собирает образы `api` и `web`, пушит их в GHCR и по SSH
-говорит серверу `docker compose pull && up -d`. На самом VPS сборки нет:
-компиляция Spring Boot и Next.js съедает всю память небольшого сервера и роняет
-живой сайт.
+Сервер настраивается и обновляется из GitHub Actions. Руками по SSH ходить не нужно
+ни для первого запуска, ни для выкатов, ни для HTTPS.
 
-## Файлы
+## Два workflow
 
-- `.github/workflows/deploy.yml` — сборка, пуш в GHCR, деплой, health check, автооткат.
-- `docker-compose.prod.yml` — оверлей: вместо `build` используются готовые образы.
-
-## Подготовка сервера (один раз)
-
-```bash
-# под root
-apt update && apt install -y git curl
-curl -fsSL https://get.docker.com | sh   # Docker + Compose v2 (нужен v2.24+)
-docker compose version
-
-# отдельный пользователь для деплоя, а не root
-adduser --disabled-password --gecos "" deploy
-usermod -aG docker deploy
-
-mkdir -p /opt/quetion-site
-chown deploy:deploy /opt/quetion-site
-
-# под deploy
-su - deploy
-git clone https://github.com/dimaandr840/quetion-site.git /opt/quetion-site
-cd /opt/quetion-site
-```
-
-Создать `/opt/quetion-site/.env` с боевыми значениями (этот файл в git не попадает
-и деплоем не перезаписывается):
-
-```env
-POSTGRES_PASSWORD=...
-JWT_SECRET=...
-MEILI_MASTER_KEY=...
-TOTP_ENC_KEY=...            # openssl rand -base64 32
-PUBLIC_ORIGIN=https://qareerquest.com
-COOKIE_SECURE=true
-ADMIN_EMAIL=...
-ADMIN_PASSWORD=...
-```
-
-Ключ для CI:
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/github-deploy -N ""
-cat ~/.ssh/github-deploy.pub >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-cat ~/.ssh/github-deploy   # приватный ключ → секрет LUXVPS_SSH_KEY
-```
-
-Первый запуск вручную (чтобы поднялись postgres/meilisearch/nginx):
-
-```bash
-export API_IMAGE=ghcr.io/dimaandr840/quetion-site/api:latest
-export WEB_IMAGE=ghcr.io/dimaandr840/quetion-site/web:latest
-docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-## Секреты и переменные в GitHub
-
-Settings → Secrets and variables → Actions.
-
-| Имя | Тип | Назначение |
+| Workflow | Когда | Что делает |
 |---|---|---|
-| `LUXVPS_HOST` | secret | IP или домен VPS |
-| `LUXVPS_USER` | secret | пользователь SSH (`deploy`) |
-| `LUXVPS_SSH_KEY` | secret | приватный ed25519-ключ целиком |
-| `LUXVPS_PORT` | secret | порт SSH, если не 22 |
-| `GHCR_PULL_TOKEN` | secret | PAT с `read:packages` для `docker login` на сервере |
-| `PUBLIC_ORIGIN` | variable | `https://qareerquest.com` — вшивается в бандл |
-| `MEDIA_PUBLIC_BASE_URL` | variable | публичный домен R2 |
-| `AUTH_ENABLED` | variable | `true` |
-| `DEPLOY_PATH` | variable | `/opt/quetion-site` (значение по умолчанию) |
-| `HEALTH_URL` | variable | `http://127.0.0.1/api/actuator/health` (по умолчанию) |
+| **Provision — LuxVPS** | вручную, обычно один раз | пакеты, swap, ufw, Docker, пользователь `deploy`, клон репо, генерация `.env`, первый запуск, сертификат Let’s Encrypt и таймер автопродления |
+| **Deploy — LuxVPS** | каждый push в `main` | сборка образов → GHCR → `pull` и `up -d` на сервере → health check → автооткат при падении |
 
-Если сделать пакеты GHCR публичными (Packages → Package settings → Change visibility),
-`GHCR_PULL_TOKEN` не нужен, но шаг `docker login` в скрипте надо будет убрать.
+## Что нужно сделать руками (один раз, ~5 минут)
 
-Желательно завести environment `production` (Settings → Environments) с required reviewers —
-тогда выкат в прод будет требовать подтверждения кнопкой.
+1. Создать VPS на LuxVPS: Ubuntu 22.04/24.04, минимум 2 vCPU / 4 GB RAM / 40 GB.
+2. Направить A-запись домена на IP сервера (без этого Let’s Encrypt не выдаст сертификат).
+3. Добавить секреты в GitHub: Settings → Secrets and variables → Actions.
 
-## Как работает выкат
+### Минимальный набор секретов
 
-1. Push в `main` → сборка образов с тегами `<short-sha>` и `latest`.
-2. SSH на VPS: `git reset --hard <sha>` (нужен для nginx.conf и compose-файлов), `pull`, `up -d`.
-3. Ждём `до 5 минут` ответа от `/api/actuator/health` (Liquibase-миграции + старт JVM).
-4. Если health не поднялся — печатаются логи и контейнеры возвращаются на предыдущие образы.
+| Имя | Обязательно | Зачем |
+|---|---|---|
+| `LUXVPS_HOST` | да | IP сервера |
+| `LUXVPS_ROOT_PASSWORD` | да, если нет ключа | root-пароль из письма LuxVPS |
+| `LUXVPS_SSH_KEY` | альтернатива паролю | приватный SSH-ключ |
+| `LUXVPS_PORT` | нет | если SSH не на 22 |
+| `GHCR_PULL_TOKEN` | нет | PAT с `read:packages`; не нужен, если пакеты GHCR публичные |
+| `ADMIN_PASSWORD` | нет | если не задан — генерируется и ложится в `/root/qareerquest-admin-password.txt` |
 
-## Ручной откат
+### Переменные (Variables)
 
-Actions → “Deploy — LuxVPS” → Run workflow → в поле `image_tag` указать short SHA
-рабочего релиза. Или на сервере:
+| Имя | Значение |
+|---|---|
+| `PUBLIC_ORIGIN` | `https://qareerquest.com` — вшивается в клиентский бандл при сборке |
+| `MEDIA_PUBLIC_BASE_URL` | публичный домен R2 |
+| `AUTH_ENABLED` | `true` |
+| `ADMIN_EMAIL` | почта первого админа |
+| `DEPLOY_PATH` | по умолчанию `/opt/quetion-site` |
+| `HEALTH_URL` | по умолчанию `http://127.0.0.1/api/actuator/health` |
 
-```bash
-cd /opt/quetion-site
-export API_IMAGE=ghcr.io/dimaandr840/quetion-site/api:<sha>
-export WEB_IMAGE=ghcr.io/dimaandr840/quetion-site/web:<sha>
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
+## Запуск
 
-## О базе данных
+1. Actions → **Provision — LuxVPS** → Run workflow. Указать домен и e-mail для Let’s Encrypt.
+   Первый запуск собирает образы на сервере (в GHCR ещё пусто) — это 10–20 минут.
+2. Дальше ничего делать не надо: каждый push в `main` сам собирает и выкатывает.
 
-Миграции прогоняет Liquibase при старте `api`, отдельного шага в CI нет.
-Откат образа не откатывает схему БД — для ломающих миграций сначала бэкап
-(`scripts/backup-db.sh`, см. `docs/backup.md`).
+Повторный запуск provision безопасен: пароли в `.env` не перегенерируются, база не трогается.
+
+## Как устроен HTTPS
+
+`nginx.conf` не редактируется. `scripts/render-nginx-conf.sh` генерирует `nginx.effective.conf`
+с двумя include, а `scripts/setup-tls.sh` кладёт туда:
+
+- `nginx/tls/tls.conf` — `server { listen 443 ssl; }` с HSTS и теми же location, что на 80;
+- `nginx/tls/redirect/redirect.conf` — редирект 80→443, кроме ACME-челленджа.
+
+Пока сертификата нет, оба каталога пусты и сайт работает по http — локальная разработка
+через базовый `docker-compose.yml` ничего не замечает.
+
+Продление — systemd-таймер `qareerquest-tls-renew.timer` два раза в сутки
+(`scripts/renew-tls.sh` → `certbot renew` + `nginx -s reload`).
+
+## Откат
+
+Actions → **Deploy — LuxVPS** → Run workflow → `image_tag

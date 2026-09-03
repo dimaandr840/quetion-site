@@ -93,7 +93,8 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.LUXVPS_HOST }}
-          username: ${{ secrets.LUXVPS_USER }}
+          username: ${{ secrets.LUXVPS_USER || secrets.LUXVPS_ROOT_USER || 'root' }}
+          password: ${{ secrets.LUXVPS_SSH_PASSWORD || secrets.LUXVPS_ROOT_PASSWORD }}
           key: ${{ secrets.LUXVPS_SSH_KEY }}
           port: ${{ secrets.LUXVPS_PORT || 22 }}
           command_timeout: 20m
@@ -109,10 +110,16 @@ jobs:
             git fetch --prune origin
             git reset --hard "$GIT_SHA"
 
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            # Генерируем nginx.effective.conf: git reset его не восстанавливает,
+            # файл не версионируется.
+            bash scripts/render-nginx-conf.sh
+
+            if [ -n "${GHCR_TOKEN:-}" ]; then
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            fi
 
             export API_IMAGE WEB_IMAGE
-            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.images.yml"
 
             # Запоминаем текущие образы для автоотката.
             PREV_API="$(docker inspect --format='{{.Config.Image}}' devprep-api-1 2>/dev/null || true)"
@@ -140,7 +147,7 @@ jobs:
 
             $COMPOSE ps
             docker image prune -f
-            docker logout ghcr.io
+            docker logout ghcr.io || true
         env:
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/quetion-site' }}
           GIT_SHA: ${{ github.sha }}

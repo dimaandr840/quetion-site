@@ -1,26 +1,19 @@
-# Продакшен-оверлей для LuxVPS.
-#
-# На сервере мы ничего не собираем: сборка Spring Boot и Next.js съедает CPU
-# и память VPS и роняет живой сайт. Образы собираются в GitHub Actions и
-# тянутся из GHCR по точному тегу коммита — поэтому откат это просто
-# запуск с предыдущим API_IMAGE/WEB_IMAGE.
+# Продакшен-оверлей для LuxVPS: конфиг nginx берётся сгенерированный
+# (scripts/render-nginx-conf.sh) и добавляются тома под Let's Encrypt.
 #
 # Использование:
-#   export API_IMAGE=ghcr.io/dimaandr840/quetion-site/api:<sha>
-#   export WEB_IMAGE=ghcr.io/dimaandr840/quetion-site/web:<sha>
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull api web
+#   bash scripts/render-nginx-conf.sh
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# Требует Docker Compose v2.24+ (из-за `!reset`, который убирает секцию build
-# из базового docker-compose.yml, чтобы compose гарантированно брал готовый образ).
+# Подмена образов api/web вынесена в отдельный docker-compose.images.yml,
+# чтобы этот файл годился и для сборки на месте — первый запуск происходит,
+# когда в GHCR ещё нет ни одного образа.
 
 services:
-  api:
-    image: ${API_IMAGE:?API_IMAGE is required}
-    build: !reset null
-    pull_policy: always
-
-  web:
-    image: ${WEB_IMAGE:?WEB_IMAGE is required}
-    build: !reset null
-    pull_policy: always
+  nginx:
+    volumes:
+      - ./nginx/nginx.effective.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/tls:/etc/nginx/tls:ro
+      - ./nginx/letsencrypt:/etc/nginx/letsencrypt:ro
+      - ./nginx/certbot-www:/var/www/certbot:ro

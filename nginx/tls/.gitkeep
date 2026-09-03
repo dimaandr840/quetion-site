@@ -1,0 +1,2 @@
+# Сюда scripts/setup-tls.sh кладёт tls.conf с server{listen 443}.
+# Сами конфиги в git не попадают: в них зашит конкретный домен.

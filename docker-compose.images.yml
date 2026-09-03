@@ -1,0 +1,18 @@
+# Оверлей готовых образов из GHCR.
+#
+# На VPS ничего не компилируется: сборка Spring Boot и Next.js съедает память
+# и роняет живой сайт. Образы собирает GitHub Actions и тянет сюда по точному
+# тегу коммита, поэтому откат — это запуск с предыдущим API_IMAGE/WEB_IMAGE.
+#
+# Требует Docker Compose v2.24+ (`!reset` убирает секцию build из базового файла).
+
+services:
+  api:
+    image: ${API_IMAGE:?API_IMAGE is required}
+    build: !reset null
+    pull_policy: always
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE is required}
+    build: !reset null
+    pull_policy: always
