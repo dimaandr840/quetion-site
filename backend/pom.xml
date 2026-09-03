@@ -28,6 +28,7 @@
     <sentry.version>8.16.0</sentry.version>
     <awssdk.version>2.31.30</awssdk.version>
     <dependency-check.version>10.0.4</dependency-check.version>
+    <logstash-encoder.version>8.0</logstash-encoder.version>
   </properties>
 
   <dependencies>
@@ -58,6 +59,41 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+
+    <!--
+      Метрики в формате Prometheus на /actuator/prometheus. Сам actuator реестров не
+      содержит: без этой зависимости эндпоинт просто не существует.
+    -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <!--
+      Трейсинг: Micrometer Tracing поверх OpenTelemetry. Мост даёт автоинструментацию
+      входящих HTTP-запросов и пропагацию W3C traceparent — именно по нему
+      трейс, начатый на nginx и продолженный в Next, склеивается с спанами Spring.
+      Альтернатива — java-агент OTel: больше покрытия без кода, но отдельный
+      артефакт в образе и сложнее воспроизводить локально.
+    -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-tracing-bridge-otel</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-exporter-otlp</artifactId>
+    </dependency>
+    <!--
+      JSON-логи с MDC (requestId/userId/traceId) для Loki. Стандартный Structured
+      Logging в Boot 3.4+ умеет ECS/logstash, но без гибкого переименования полей,
+      а нам нужны ровно те имена, которые разбирает promtail и на которые
+      настроен derivedFields в Grafana.
+    -->
+    <dependency>
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>${logstash-encoder.version}</version>
     </dependency>
 
     <dependency>
