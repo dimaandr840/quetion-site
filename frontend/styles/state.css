@@ -1,0 +1,172 @@
+/* ============================================================================
+   Слой интерактивных состояний.
+
+   До этого файла hover/active/focus-visible/disabled/invalid/busy
+   описывались локально в каждом *.module.css. Результат — «почти
+   консистентность»: индикатор фокуса в одном компоненте 2px, в другом 3px,
+   у третьего своя логика ошибки. Именно эта разница отделяет проект от
+   Vercel сильнее, чем любая отдельная анимация.
+
+   Здесь лежит ровно то, что должно быть одинаковым во всём продукте.
+   Кривые и длительности НЕ дублируются — они приходят из motion.css
+   (--dur-*, --ease-*, --transition-colors), поэтому этот файл
+   импортируется после него.
+
+   Классы opt-in: существующие компоненты продолжают работать без правок,
+   новые собираются из .field / .interactive / .pressable.
+   ========================================================================== */
+
+:root {
+  /* Один индикатор фокуса на весь проект. */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--accent);
+  /* Зазор между элементом и обводкой — цветом поверхности: за счёт него
+     фокус читается и на акцентной заливке, где обводка --accent совпала бы
+     с фоном самой кнопки. */
+  --focus-ring-gap: 2px;
+
+  --state-disabled-opacity: 0.55;
+  --state-hover-surface: var(--surface-muted);
+  --state-press-scale: 0.985;
+}
+
+/* Клавиатурный фокус. border-radius сознательно не переопределяем: он ломал
+   форму скруглённых контролов в момент фокуса. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 var(--focus-ring-gap) var(--surface);
+}
+
+/* ---------- Базовое интерактивное поведение ---------- */
+
+.interactive {
+  transition: var(--transition-colors);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .interactive:hover {
+    background-color: var(--state-hover-surface);
+  }
+}
+
+/* Тактильный отклик на нажатие. Отдельный класс, а не часть .interactive:
+   у элементов внутри списка сжатие читается как дребезг. */
+.pressable:active {
+  transform: translate3d(0, 0, 0) scale(var(--state-press-scale));
+}
+
+/* ---------- Выключено ---------- */
+/* Покрываем сразу три записи состояния: нативный :disabled, ARIA-версию для
+   не-нативных контролов и data-атрибут для составных блоков. */
+.interactive:disabled,
+.field:disabled,
+[aria-disabled="true"],
+[data-disabled="true"] {
+  opacity: var(--state-disabled-opacity);
+  cursor: not-allowed;
+  /* Тень у выключенного элемента врёт про доступность действия. */
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .interactive:disabled:hover,
+  [aria-disabled="true"]:hover,
+  [data-disabled="true"]:hover {
+    background-color: initial;
+  }
+}
+
+/* ---------- Загрузка ---------- */
+/* Ставится на контейнер, который уже отрисован, но ждёт ответ сервера.
+   aria-busy="true" обязателен рядом: скринридер должен узнать об ожидании. */
+[data-busy="true"] {
+  cursor: progress;
+  /* pointer-events не снимаем: элемент должен оставаться доступным для
+     фокуса, иначе таб-порядок рвётся посреди формы. Блокировка — дело
+     самого контрола через disabled. */
+  opacity: 0.7;
+  transition: opacity var(--dur-fast) var(--ease-standard);
+}
+
+/* ---------- Поле ввода ---------- */
+/* Единая база для input/textarea/select. --border-input уже посчитан под
+   non-text contrast 3:1, высота и внутренние отступы берутся из
+   --control-* — поэтому поле и кнопка совпадают по высоте без подгонки. */
+.field {
+  width: 100%;
+  min-height: var(--control-h-md);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  /* 1rem: на iOS размер меньше 16px заставляет Safari зумить страницу
+     при фокусе в поле. */
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: var(--transition-colors);
+}
+
+.field::placeholder {
+  color: var(--text-muted);
+}
+
+.field:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+}
+
+.field:focus-visible {
+  border-color: var(--accent);
+}
+
+/* Ошибка: цвет — не единственный признак (WCAG 1.4.1), поэтому рядом
+   обязателен текст .field-error, связанный через aria-describedby. */
+.field[aria-invalid="true"] {
+  border-color: var(--error-main);
+  background: var(--error-light);
+}
+
+.field[aria-invalid="true"]:focus-visible {
+  --focus-ring-color: var(--error-main);
+}
+
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-inline);
+  margin-top: var(--space-inline-tight);
+  color: var(--on-error);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.field-hint {
+  margin-top: var(--space-inline-tight);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Метка и поле — одна вертикальная пара, а не два независимых блока. */
+.field-label {
+  display: block;
+  margin-bottom: var(--space-inline);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* В режиме принудительных цветов системная обводка обязательна. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  .field[aria-invalid="true"] {
+    border-color: LinkText;
+  }
+}

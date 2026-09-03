@@ -43,17 +43,41 @@ function readCookie(name: string): string | null {
   return null;
 }
 
+/**
+ * Единственный незавершённый запрос токена.
+ *
+ * Без него параллельные мутации (например, массовое действие в админке или
+ * два submit подряд) каждая дергали `/auth/csrf`: сookies ещё нет, проверка
+ * `readCookie` у всех проваливается одновременно, и на сервер уходит N
+ * одинаковых запросов. Лишняя нагрузка — меньшая из проблем: каждый ответ
+ * перезаписывает cookie новым токеном, поэтому запрос, успевший прочитать
+ * предыдущее значение, отправляет уже недействительный заголовок и получает
+ * 403 на ровном месте.
+ */
+let csrfRequest: Promise<string | null> | null = null;
+
 /** Инициирует выдачу cookie `XSRF-TOKEN`, если её ещё нет. */
 async function ensureCsrfToken(): Promise<string | null> {
   const existing = readCookie(CSRF_COOKIE);
   if (existing) return existing;
 
-  await fetch(`${API_BASE}/auth/csrf`, {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-  });
-  return readCookie(CSRF_COOKIE);
+  // Промис снимается в finally, а не после await: иначе при ошибке сети
+  // ссылка осталась бы навсегда и все последующие мутации переиспользовали
+  // бы уже отклонённый промис.
+  csrfRequest ??= (async () => {
+    try {
+      await fetch(`${API_BASE}/auth/csrf`, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+      return readCookie(CSRF_COOKIE);
+    } finally {
+      csrfRequest = null;
+    }
+  })();
+
+  return csrfRequest;
 }
 
 interface ProblemDetail {

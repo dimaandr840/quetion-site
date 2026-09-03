@@ -1,5 +1,8 @@
 @import "./tokens.css";
 @import "./motion.css";
+/* state.css идёт после motion.css: он использует --dur-*, --ease-* и
+   --transition-colors и сознательно их не дублирует. */
+@import "./state.css";
 
 *,
 *::before,
@@ -26,7 +29,7 @@ html {
 body {
   background: var(--page-bg);
   color: var(--text-primary);
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
   /* rem вместо px: жёсткий пиксель игнорировал настройку размера шрифта
      в браузере, то есть вся типографика не масштабировалась. */
   font-size: 1rem;
@@ -35,7 +38,7 @@ body {
   /* Длинные ссылки, слаги и идентификаторы переносим вместо распирания
      контейнера; break-all к обычной прозе не применяем. */
   overflow-wrap: break-word;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: var(--transition-colors);
 }
 
 a {
@@ -71,7 +74,7 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   color: var(--text-primary);
   /* Без балансировки последнее слово заголовка регулярно оставалось
      одиноким на своей строке. Эвристика браузера, деградирует в обычный
@@ -87,7 +90,7 @@ p {
 code,
 pre,
 kbd {
-  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
 }
 
 code,
@@ -95,21 +98,9 @@ kbd {
   overflow-wrap: anywhere;
 }
 
-/* Клавиатурный фокус — один индикатор на весь проект.
-
-   Было две конкурирующие декларации: обводка 2px цвета --accent плюс
-   свечение --accent-soft. На главной кнопке (заливка --accent) обводка
-   совпадала с фоном самой кнопки и фокус физически не читался.
-
-   Теперь между элементом и обводкой лежит зазор цвета поверхности:
-   индикатор виден и на акцентной заливке, и на светлом фоне.
-   border-radius больше не переопределяем — он ломал форму скруглённых
-   контролов в момент фокуса. */
-:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--surface);
-}
+/* Индикатор клавиатурного фокуса переехал в state.css — там же, где
+   остальные состояния. Здесь он оставался единственным «состоянием» на
+   весь проект и терялся среди типографики. */
 
 /* Плавные переходы между страницами там, где браузер умеет View Transitions. */
 @media (prefers-reduced-motion: no-preference) {
@@ -128,13 +119,9 @@ kbd {
   scrollbar-color: var(--border-strong) transparent;
 }
 
-/* В режиме принудительных цветов системная обводка обязательна, а стекло
-   превращается в обычную поверхность. */
+/* В режиме принудительных цветов стекло превращается в обычную поверхность
+   (обводка фокуса — в state.css). */
 @media (forced-colors: active) {
-  :focus-visible {
-    outline-color: Highlight;
-  }
-
   .glass {
     background: Canvas;
   }
@@ -146,6 +133,8 @@ kbd {
   width: 100%;
   max-width: var(--shell-max);
   margin: 0 auto;
+  /* --shell-pad — clamp(), поэтому двух медиа-оверрайдов на 1024px и 768px
+     больше нет: поле течёт вместе с шириной вьюпорта. */
   padding-inline: var(--shell-pad);
 }
 
@@ -169,7 +158,7 @@ kbd {
 
 /* Fluid type scale: размер живёт между 375px и 1440px без брейкпоинт-скачков. */
 .display-large {
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   font-size: var(--step-display);
   font-weight: 800;
   line-height: 1.08;
@@ -178,7 +167,7 @@ kbd {
 }
 
 .h1 {
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   font-size: var(--step-h1);
   font-weight: 800;
   line-height: 1.15;
@@ -186,7 +175,7 @@ kbd {
 }
 
 .h2 {
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   font-size: var(--step-h2);
   font-weight: 700;
   line-height: 1.2;
@@ -194,14 +183,14 @@ kbd {
 }
 
 .h3 {
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   font-size: var(--step-h3);
   font-weight: 700;
   line-height: 1.25;
 }
 
 .h4 {
-  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-family: var(--font-display), system-ui, sans-serif;
   font-size: var(--step-h4);
   font-weight: 700;
   line-height: 1.3;
@@ -230,7 +219,7 @@ kbd {
 }
 
 .overline {
-  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -256,12 +245,12 @@ kbd {
   z-index: var(--z-modal);
   transform: translate(-50%, -120%);
   padding: var(--space-12) var(--space-24);
-  border-radius: 0 0 var(--radius-8) var(--radius-8);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 0.875rem;
   font-weight: 600;
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 .skip-link:focus-visible {
@@ -310,20 +299,6 @@ kbd {
 .rail > * {
   scroll-snap-align: start;
   flex: 0 0 auto;
-}
-
-/* Адаптивные отступы идут по каноническому набору брейкпоинтов
-   (см. --bp-* в tokens.css), а не по единственному значению 900px. */
-@media (max-width: 1024px) {
-  :root {
-    --shell-pad: 40px;
-  }
-}
-
-@media (max-width: 768px) {
-  :root {
-    --shell-pad: 24px;
-  }
 }
 
 /* Блок prefers-reduced-motion живёт в motion.css — единственный на проект.
