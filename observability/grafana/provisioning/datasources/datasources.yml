@@ -1,0 +1,46 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: devprep-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      # Из графика задержки можно сразу прыгнуть в трейс: exemplars несут
+      # trace_id, который Micrometer прикладывает к гистограммам.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: devprep-tempo
+
+  - name: Loki
+    type: loki
+    uid: devprep-loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # Связка «лог → трейс»: в JSON-логах есть traceId, и Grafana делает
+        # из него ссылку в Tempo. Это и есть ответ на «медленно на странице вопроса».
+        - name: traceId
+          matcherRegex: "\"traceId\":\"(\\w+)\""
+          url: "$${__value.raw}"
+          datasourceUid: devprep-tempo
+
+  - name: Tempo
+    type: tempo
+    uid: devprep-tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: devprep-loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+      tracesToMetrics:
+        datasourceUid: devprep-prometheus
+      nodeGraph:
+        enabled: true

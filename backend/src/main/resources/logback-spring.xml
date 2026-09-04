@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Структурные логи для Loki. Ключи полей зафиксированы: их разбирает promtail
+  (observability/promtail/promtail.yml) и по traceId строит ссылку в Tempo
+  (derivedFields в observability/grafana/provisioning/datasources/datasources.yml).
+  Переименование полей здесь тихо ломает оба места.
+
+  Локально (профиль dev) остаётся человекочитаемый вывод: читать JSON глазами
+  в терминале — ровно тот вид наблюдаемости, который все ненавидят.
+-->
+<configuration>
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="devprep-api"/>
+  <springProperty scope="context" name="appEnv" source="sentry.environment" defaultValue="local"/>
+
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+      <providers>
+        <timestamp>
+          <fieldName>timestamp</fieldName>
+          <timeZone>UTC</timeZone>
+          <pattern>yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX</pattern>
+        </timestamp>
+        <logLevel><fieldName>level</fieldName></logLevel>
+        <loggerName><fieldName>logger</fieldName></loggerName>
+        <threadName><fieldName>thread</fieldName></threadName>
+        <message><fieldName>message</fieldName></message>
+        <!-- requestId / userId / traceId / spanId приезжают из MDC:
+             см. observability/RequestIdFilter.java и UserContextFilter.java -->
+        <mdc/>
+        <pattern>
+          <pattern>{"service":"${appName}","env":"${appEnv}"}</pattern>
+        </pattern>
+        <stackTrace>
+          <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+            <!-- Полные стеки Spring дают по 200+ строк на ошибку и вытесняют всё
+                 остальное из retention. 40 строк хватает, чтобы найти причину. -->
+            <maxDepthPerThrowable>40</maxDepthPerThrowable>
+            <shortenedClassNameLength>40</shortenedClassNameLength>
+            <rootCauseFirst>true</rootCauseFirst>
+            <exclude>^sun\.reflect\..*</exclude>
+            <exclude>^java\.lang\.reflect\..*</exclude>
+            <exclude>^org\.springframework\.cglib\..*</exclude>
+          </throwableConverter>
+        </stackTrace>
+      </providers>
+    </encoder>
+  </appender>
+
+  <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <springProfile name="dev,test">
+    <root level="INFO">
+      <appender-ref ref="PLAIN"/>
+    </root>
+  </springProfile>
+
+  <springProfile name="!dev &amp; !test">
+    <root level="INFO">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+</configuration>

@@ -27,9 +27,20 @@ export interface SpecializationTreeGroup {
   topics: Category[];
 }
 
+/**
+ * Режим, в котором бэкенд обслужил запрос:
+ *  - `index`     — полноценный поиск через Meilisearch;
+ *  - `database`  — индекс выключен конфигом, штатный ILIKE по Postgres;
+ *  - `fallback`  — индекс должен был работать, но недоступен — это деградация;
+ *  - `deep-page` — запрос глубже лимита Meilisearch, обслужен базой.
+ */
+export type SearchMode = "index" | "database" | "fallback" | "deep-page";
+
 export interface SearchFacets {
   query: string;
   total: number;
+  page: number;
+  size: number;
   items: QuestionSummary[];
   levelCounts: Record<Level, number>;
   professionCounts: Array<{
@@ -39,11 +50,20 @@ export interface SearchFacets {
     count: number;
   }>;
   fromIndex: boolean;
+  searchMode: SearchMode;
+  /**
+   * true только при вынужденной деградации. Не используйте вместо него `!fromIndex`:
+   * при выключенном конфигом индексе поиск по базе — штатный режим,
+   * и предупреждать пользователя не о чем.
+   */
+  degraded: boolean;
 }
 
 export interface SearchFilters {
   levels?: Level[];
   professions?: string[];
+  page?: number;
+  size?: number;
 }
 
 /* ---- Вопросы ---- */
@@ -133,6 +153,14 @@ export function buildSearchQuery(query: string, filters: SearchFilters = {}): st
   if (query) params.set("q", query);
   for (const level of filters.levels ?? []) params.append("level", level);
   for (const slug of filters.professions ?? []) params.append("profession", slug);
+  // page/size передаём только явно заданными: иначе бэкенд не сможет
+  // применить свой размер страницы из конфига.
+  if (typeof filters.page === "number" && filters.page > 0) {
+    params.set("page", String(filters.page));
+  }
+  if (typeof filters.size === "number" && filters.size > 0) {
+    params.set("size", String(filters.size));
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }

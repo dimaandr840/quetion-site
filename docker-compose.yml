@@ -1,10 +1,14 @@
 name: devprep
 
 # Общие правила усиления для всех сервисов:
-#  * no-new-privileges закрывает путь к эскалации через setuid-бинарники
-#    внутри образа, если RCE всё-таки случилась;
+#  * no-new-privileges закрывает путь к эскалации через setuid-бинарфайлы
+#    внутри образа, если RCE вс႑-таки случилась;
 #  * база и поиск порты наружу не публикуют вообще — только nginx смотрит в сеть;
 #  * размер логов ограничен, чтобы шумные атаки не забили диск хоста.
+#
+# Локальный json-file остаётся буфером последней надежды: Promtail читает именно его,
+# поэтому замена драйвера на loki сделала бы логи недоступными в момент, когда они нужнее всего —
+# когда лежит сам Loki.
 x-hardening: &hardening
   security_opt:
     - no-new-privileges:true
@@ -70,9 +74,20 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-devprep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      MEILI_ENABLED: "true"
+      MEILI_ENABLED: ${MEILI_ENABLED:-true}
       MEILI_HOST: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      # Жёсткий потолок Meilisearch на глубину выдачи. Запросы глубже этого значения
+      # уходят в Postgres, а не обрезаются молча посреди пагинации.
+      MEILI_MAX_TOTAL_HITS: ${MEILI_MAX_TOTAL_HITS:-1000}
+      SEARCH_PAGE_SIZE: ${SEARCH_PAGE_SIZE:-20}
+      SEARCH_MAX_PAGE_SIZE: ${SEARCH_MAX_PAGE_SIZE:-50}
+      SEARCH_HEALTH_INTERVAL: ${SEARCH_HEALTH_INTERVAL:-PT30S}
+      # Фичефлаги живут в БД; значения ниже — только стартовые defaults для первого
+      # запуска и аварийного режима, когда таблица недоступна. См. docs/feature-flags.md.
+      FLAGS_ENABLED: ${FLAGS_ENABLED:-true}
+      FLAGS_CACHE_TTL: ${FLAGS_CACHE_TTL:-PT15S}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
       CORS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
       # Загрузка картинок. Без MEDIA_ENABLED=true сервис работает как раньше,
       # а админка показывает ошибку при попытке загрузить файл. См. docs/media.md.
@@ -103,7 +118,8 @@ services:
       # Без ключа TOTP-секреты легли бы в БД открытым текстом, поэтому переменная обязательна.
       TOTP_ENC_KEY: "${TOTP_ENC_KEY:?TOTP_ENC_KEY обязателен, см. openssl rand -base64 32}"
       # SMTP для писем с кодом восстановления доступа. Если SMTP_HOST или
-      # PASSWORD_RESET_MAIL_FROM пусты, сервис запускается, но письма не уходят.
+      # PASSWORD_RESET_MAIL_FROM пусты, сервис запускается, но письма не уходят —
+      # теперь это видно в /api/admin/status и в метрике devprep_mail_up.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
@@ -116,7 +132,13 @@ services:
       PASSWORD_RESET_MAX_ATTEMPTS: ${PASSWORD_RESET_MAX_ATTEMPTS:-5}
       PASSWORD_RESET_RESET_TOTP: ${PASSWORD_RESET_RESET_TOTP:-true}
       SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-false}
-      MANAGEMENT_ENDPOINTS: ${MANAGEMENT_ENDPOINTS:-health,info}
+      # prometheus в списке по умолчанию: наружу эндпоинт вс႑ равно не выходит —
+      # nginx отдаёт 404 на весь /actuator/, кроме /actuator/health.
+      MANAGEMENT_ENDPOINTS: ${MANAGEMENT_ENDPOINTS:-health,info,prometheus}
+      # 10% трейсов — компромисс между объᄅмом данных и шансом поймать редкий тормоз.
+      # На время разбора инцидента ставьте 1.0.
+      TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-0.1}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
@@ -137,8 +159,9 @@ services:
     build:
       context: ./frontend
       args:
-        # Флаг вшивается в клиентский бандл на этапе сборки, поэтому build arg,
-        # а не environment: после его смены нужен --build.
+        # Значение по умолчанию для первого рендера и для proxy.ts, который работает
+        # до гидратации. Фактическое состояние флагов приходит из /api/flags в рантайме,
+        # пересборка ради переключения больше не нужна.
         NEXT_PUBLIC_AUTH_ENABLED: ${AUTH_ENABLED:-true}
         # Абсолютный origin нужен robots.txt и sitemap.xml.
         NEXT_PUBLIC_SITE_URL: ${PUBLIC_ORIGIN:-http://localhost}
@@ -150,6 +173,14 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_ORIGIN:-http://localhost}/api
       NEXT_PUBLIC_MEDIA_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
       API_INTERNAL_BASE_URL: http://api:8080/api
+      # Серверная часть Next участвует в том же трейсе, что nginx и Spring:
+      # без этого звена «медленно на странице вопроса» не разбирается на слагаемые.
+      OTEL_SERVICE_NAME: devprep-web
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318}
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: ${TRACING_SAMPLE_RATE:-0.1}
+      # Порт с метриками Next для Prometheus (job devprep-web). Наружу не публикуется.
+      METRICS_PORT: "9464"
     depends_on:
       - api
     restart: unless-stopped

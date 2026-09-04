@@ -48,7 +48,7 @@ spring:
       enabled: true
   # SMTP нужен только для писем с кодом восстановления доступа.
   # Если SMTP_HOST пуст, сервис запускается как обычно, но сброс пароля
-  # по почте не работает (в логах будет ошибка о ненастроенном SMTP).
+  # по почте не работает — статус виден в админке (/api/admin/status).
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
@@ -132,6 +132,31 @@ devprep:
     api-key: ${MEILI_MASTER_KEY:}
     index: questions
     reindex-on-startup: true
+    # Meilisearch по умолчанию отдаёт не более 1000 результатов (maxTotalHits).
+    # Глубокие страницы за этой границей обслуживает Postgres: иначе индекс
+    # молча отдаёт пустую страницу, и пагинация выглядит сломанной.
+    max-total-hits: ${MEILI_MAX_TOTAL_HITS:1000}
+    # Размер страницы поиска по умолчанию и потолок, выше которого запрос
+    # обрезается (защита от size=100000 из строки запроса).
+    page-size: ${SEARCH_PAGE_SIZE:20}
+    max-page-size: ${SEARCH_MAX_PAGE_SIZE:50}
+    # Период проверки живости индекса для гейджа devprep_search_up и админки.
+    health-check-interval: ${SEARCH_HEALTH_INTERVAL:PT30S}
+  flags:
+    # Рантайм-флаги: таблица feature_flags + кэш в памяти. Значения меняются
+    # без пересборки образов и без рестарта — в отличие от NEXT_PUBLIC_*,
+    # которые вшиваются в бандл на этапе build.
+    enabled: ${FLAGS_ENABLED:true}
+    # TTL кэша. Горячий путь не должен ходить в БД на каждую проверку флага,
+    # но и ждать минуты при раскатке не хочется: 15 секунд — компромисс.
+    cache-ttl: ${FLAGS_CACHE_TTL:PT15S}
+    # Значения, с которыми флаги создаются в БД при первом запуске и которые
+    # используются, если БД недоступна (флаги не должны ронять запрос).
+    defaults:
+      auth-enabled: ${AUTH_ENABLED:true}
+      search-index-enabled: ${MEILI_ENABLED:false}
+      media-enabled: ${MEDIA_ENABLED:false}
+      registration-enabled: ${REGISTRATION_ENABLED:false}
 
 management:
   endpoints:
@@ -139,7 +164,10 @@ management:
       exposure:
         # Метрики Prometheus открываются только там, где есть закрытый контур
         # сбора: они рассказывают о внутренней структуре и нагрузке сервиса.
-        include: ${MANAGEMENT_ENDPOINTS:health,info}
+        # В docker-compose порт 8080 не публикуется наружу, а nginx отдаёт 404
+        # на всё /actuator/, кроме /actuator/health — поэтому prometheus в списке
+        # по умолчанию безопасен и доступен только из внутренней сети.
+        include: ${MANAGEMENT_ENDPOINTS:health,info,prometheus}
   endpoint:
     health:
       probes:
@@ -150,6 +178,36 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+    # Падение Meilisearch — не причина выводить контейнер из readiness:
+    # поиск деградирует до ILIKE, и трафик надо продолжать обслуживать.
+    # Статус виден в /actuator/health детально и в алертах по devprep_search_up.
+    group:
+      readiness:
+        include: readinessState,db
+  metrics:
+    distribution:
+      # Без гистограммы histogram_quantile считать не из чего: Micrometer по
+      # умолчанию отдаёт только count/sum/max, и p95 в Prometheus невозможен.
+      percentiles-histogram:
+        http.server.requests: true
+      # Границы вокруг SLO 500 мс — иначе ближайшие бакеты стоят так широко,
+      # что оценка p95 гуляет на сотни миллисекунд.
+      slo:
+        http.server.requests: 50ms,100ms,200ms,300ms,500ms,800ms,1s,2s,5s
+      minimum-expected-value:
+        http.server.requests: 5ms
+      maximum-expected-value:
+        http.server.requests: 10s
+  tracing:
+    sampling:
+      # 10% по умолчанию: полный семплинг на публичном трафике быстро забивает
+      # диск Tempo. При разборе конкретного инцидента временно ставьте 1.0.
+      probability: ${TRACING_SAMPLE_RATE:0.1}
+  otlp:
+    tracing:
+      # Трейсы уходят в Tempo напрямую. Если стек наблюдаемости не запущен,
+      # экспортёр молча ретрайтит в фоне — запросы от этого не страдают.
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://tempo:4318/v1/traces}
 
 springdoc:
   # Схема API и Swagger UI выключены по умолчанию: публичная схема — это

@@ -1,0 +1,77 @@
+# Promtail читает логи контейнеров через docker socket в режиме только-чтение.
+#
+# Почему не docker-драйвер loki: он требует плагина на хосте, ломает
+# `docker logs` и теряет строки, когда Loki недоступен, — то есть ровно в
+# тот момент, когда логи нужнее всего. Текущая схема: json-file остаётся
+# буфером на диске (10 МБ × 5), promtail догоняет после восстановления.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=devprep"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+    pipeline_stages:
+      # docker-драйвер оборачивает строку в {"log": ...} — сначала снимаем обёртку.
+      - docker: {}
+
+      # api и web пишут JSON одного формата (см. backend/src/main/resources/
+      # logback-spring.xml и frontend/lib/log.ts).
+      - match:
+          selector: '{service=~"api|web"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  logger: logger
+                  requestId: requestId
+                  userId: userId
+                  traceId: traceId
+                  spanId: spanId
+                  timestamp: timestamp
+            - labels:
+                level:
+            # Корреляционные идентификаторы — в structured metadata, а не в метки:
+            # метка с trace-id создаёт поток на каждый запрос и убивает индекс.
+            - structured_metadata:
+                requestId:
+                traceId:
+                spanId:
+                userId:
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+                action_on_failure: fudge
+
+      # nginx пишет access.log в stdout тем же JSON'ом (log_format json_access).
+      - match:
+          selector: '{service="nginx"}'
+          stages:
+            - json:
+                expressions:
+                  requestId: request_id
+                  status: status
+                  traceId: trace_id
+            - labels:
+                status:
+            - structured_metadata:
+                requestId:
+                traceId:

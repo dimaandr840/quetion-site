@@ -22,6 +22,7 @@ import { QuestionFilters } from "@/components/ui/filters/QuestionFilters";
 import { ResultsToolbar } from "@/components/ui/filters/ResultsToolbar";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { Pill } from "@/components/ui/Tag";
+import { DegradedSearchBanner } from "@/components/search/DegradedSearchBanner";
 import styles from "@/styles/list.module.css";
 import { buildMetadata } from "@/lib/seo";
 
@@ -102,6 +103,8 @@ export default async function SearchPage({ searchParams }: PageProps) {
             : "Начните с запроса или сразу сузьте выборку фильтрами."}
         </p>
       </div>
+
+      <DegradedSearchBanner degraded={matchedAll.degraded} />
 
       <div className={styles.toolbar}>
         <div className={styles.searchField}>

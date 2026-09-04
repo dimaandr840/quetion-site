@@ -64,6 +64,38 @@ http://localhost
 curl http://localhost/api/actuator/health
 ```
 
+Статус `DEGRADED` в компоненте `dependencies` — это не авария сервиса, а отказ внешней
+зависимости (поиск, S3 или почта). Общий `status` остаётся `UP`, чтобы падение Meilisearch
+не выбивало контейнер из ротации.
+
+## Мониторинг
+
+Метрики, трейсы, логи и алерты поднимаются отдельным файлом:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+```
+
+Grafana — http://127.0.0.1:3001, Prometheus — http://127.0.0.1:9090, Alertmanager —
+http://127.0.0.1:9093. Порты привязаны к локальному интерфейсу, на сервере ходите через `ssh -L`.
+
+Подробности, метрики, SLO и настройка алертов — в [docs/observability.md](docs/observability.md).
+
+## Фичефлаги
+
+Флаги хранятся в таблице `feature_flags` и меняются без пересборки образа:
+`GET /api/flags`, `GET /api/admin/flags`, `PUT /api/admin/flags/{key}` (включая процентную
+раскатку). Переменные окружения теперь задают только значения по умолчанию.
+См. [docs/feature-flags.md](docs/feature-flags.md).
+
+## Поведение при отказе зависимостей
+
+- **Meilisearch недоступен** — поиск переключается на Postgres, ответ помечен `degraded`,
+  пользователь видит баннер вместо ошибки 500.
+- **S3 не настроен или недоступен** — загрузка выключена, статус виден в админке.
+- **SMTP не работает** — письма больше не теряются молча: есть `GET /api/admin/status`,
+  панель в админке, метрика `devprep_mail_up` и алерт.
+
 ## Локальная разработка
 
 ### Инфраструктура
@@ -82,6 +114,9 @@ mvn spring-boot:run
 ```
 
 Backend использует Java 21. По умолчанию API доступен на `http://localhost:8080`.
+
+В профилях `dev` и `test` логи остаются читаемыми строками; JSON включается только
+в остальных профилях.
 
 ### Frontend
 
@@ -123,6 +158,9 @@ PASSWORD_RESET_RESET_TOTP=true
 ```
 
 ## Как смотреть логи
+
+Если поднят стек мониторинга, удобнее искать в Grafana → Explore → Loki: там есть фильтры
+по `requestId`, `userId` и переход из лога в трейс. Команды ниже работают всегда.
 
 ### Все сервисы сразу
 
@@ -167,6 +205,15 @@ docker compose logs --since=1h api
 
 # Логи API за последние 10 минут и продолжить смотреть новые
 docker compose logs --since=10m -f api
+```
+
+### Поиск по конкретному запросу
+
+Ответ содержит заголовок `X-Request-Id`; по этому же значению логи nginx, Next и Spring
+связываются в одну цепочку:
+
+```bash
+docker compose logs --no-log-prefix api | grep <request-id>
 ```
 
 ### Если backend запущен без Docker

@@ -1,0 +1,166 @@
+# SLO платформы:
+#   * доступность  — 99.9% успешных ответов API за 30 дней;
+#   * задержка     — p95 < 500 мс на публичных ручках;
+#   * ошибки       — доля 5xx < 1%.
+#
+# Записывающие правила считаются один раз и переиспользуются алертами и
+# дашбордом: одинаковые выражения в трёх местах разъезжаются при первой правке.
+groups:
+  - name: devprep-recording
+    interval: 15s
+    rules:
+      - record: devprep:api_requests:rate5m
+        expr: sum(rate(http_server_requests_seconds_count{job="devprep-api"}[5m]))
+
+      - record: devprep:api_errors:rate5m
+        expr: sum(rate(http_server_requests_seconds_count{job="devprep-api",status=~"5.."}[5m]))
+
+      # clamp_min в знаменателе: без трафика деление даёт NaN, и алерт
+      # молча перестаёт срабатывать вместо честного нуля ошибок.
+      - record: devprep:api_error_ratio:rate5m
+        expr: |
+          devprep:api_errors:rate5m
+            / clamp_min(devprep:api_requests:rate5m, 0.001)
+
+      - record: devprep:api_latency_seconds:p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="devprep-api"}[5m]))
+          )
+
+      - record: devprep:api_latency_seconds:p99_5m
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="devprep-api"}[5m]))
+          )
+
+  - name: devprep-availability
+    rules:
+      - alert: ApiDown
+        expr: up{job="devprep-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "API не отвечает на сбор метрик"
+          description: "Prometheus не может опросить api:8080 более 2 минут."
+
+      # Быстрое прожигание бюджета ошибок: 14.4x от 0.1% за час съедает
+      # ~2% месячного бюджета — это повод будить человека, а не письмо утром.
+      - alert: ApiErrorBudgetBurnFast
+        expr: devprep:api_error_ratio:rate5m > 0.0144
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Быстрое прожигание бюджета ошибок API"
+          description: "Доля 5xx {{ $value | humanizePercentage }} при цели < 1%."
+
+      - alert: ApiErrorRateHigh
+        expr: devprep:api_error_ratio:rate5m > 0.01
+        for: 15m
+        labels:
+          severity: warning
+          slo: errors
+        annotations:
+          summary: "Доля ошибок 5xx выше 1%"
+          description: "{{ $value | humanizePercentage }} запросов завершаются 5xx."
+
+  - name: devprep-latency
+    rules:
+      - alert: ApiLatencyP95High
+        expr: devprep:api_latency_seconds:p95_5m > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "p95 задержки API выше 500 мс"
+          description: "p95 = {{ $value | humanizeDuration }}. Трейс: Grafana → Tempo, фильтр по service.name=devprep-api."
+
+      - alert: ApiLatencyP99Critical
+        expr: devprep:api_latency_seconds:p99_5m > 2
+        for: 10m
+        labels:
+          severity: critical
+          slo: latency
+        annotations:
+          summary: "p99 задержки API выше 2 с"
+
+  - name: devprep-resources
+    rules:
+      # Ожидающие соединения — первый признак того, что пул стал узким местом:
+      # запросы уже стоят в очереди, а p95 ещё не успел вырасти.
+      - alert: DbPoolExhausted
+        expr: hikaricp_connections_pending{job="devprep-api"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Очередь за соединением к Postgres"
+          description: "{{ $value }} потоков ждут соединение (пул devprep-pool)."
+
+      - alert: DbPoolSaturated
+        expr: |
+          hikaricp_connections_active{job="devprep-api"}
+            / clamp_min(hikaricp_connections_max{job="devprep-api"}, 1) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Пул соединений занят более чем на 90%"
+
+      - alert: JvmHeapPressure
+        expr: |
+          sum by (job) (jvm_memory_used_bytes{job="devprep-api",area="heap"})
+            / sum by (job) (jvm_memory_max_bytes{job="devprep-api",area="heap"}) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Heap занят более чем на 90%"
+
+  - name: devprep-dependencies
+    rules:
+      # Гейдж пишет MeilisearchHealthIndicator: 1 — индекс отвечает, 0 — нет.
+      - alert: MeilisearchDown
+        expr: devprep_search_up{job="devprep-api"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meilisearch недоступен, поиск в упрощённом режиме"
+          description: "Запросы обслуживает ILIKE-фолбэк по Postgres: опечатки и релевантность не работают."
+
+      - alert: SearchDegradedTraffic
+        expr: |
+          sum(rate(devprep_search_requests_total{job="devprep-api",mode="fallback"}[10m]))
+            / clamp_min(sum(rate(devprep_search_requests_total{job="devprep-api"}[10m])), 0.001) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Более 10% поисковых запросов идут через фолбэк"
+
+      - alert: MediaStorageFailing
+        expr: sum(rate(devprep_media_failures_total{job="devprep-api"}[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ошибки объектного хранилища картинок"
+
+      # Письма с кодом восстановления — единственный способ вернуть доступ,
+      # поэтому любая неудачная отправка попадает в алерт, а не только в лог.
+      - alert: SmtpFailing
+        expr: sum(rate(devprep_mail_failures_total{job="devprep-api"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Письма восстановления доступа не отправляются"
+          description: "Проверьте SMTP_HOST/PASSWORD_RESET_MAIL_FROM и статус в админке (/admin/status)."

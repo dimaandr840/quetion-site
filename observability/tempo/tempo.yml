@@ -1,0 +1,34 @@
+# Tempo принимает OTLP напрямую от api и web. Отдельный otel-collector здесь
+# был бы лишним звеном: семплинг и атрибуты настраиваются в самих сервисах.
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # Трейсы живут неделю: они нужны для разбора свежего инцидента,
+    # а для трендов есть метрики.
+    block_retention: 168h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false
