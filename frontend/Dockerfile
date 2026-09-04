@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # npm ci регулярно падал с ECONNRESET на медленном или нестабильном канале:
@@ -14,7 +14,7 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
 # и npm ci падает с EUSAGE. Вернуть npm ci после коммита актуального лока.
 RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_AUTH_ENABLED=true
 ARG NEXT_PUBLIC_SITE_URL=http://localhost
@@ -25,7 +25,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine AS run
+FROM node:26-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
