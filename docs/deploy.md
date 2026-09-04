@@ -8,16 +8,23 @@
 | Workflow | Когда | Что делает |
 |---|---|---|
 | **Provision — LuxVPS** | вручную, обычно один раз | пакеты, swap, ufw, Docker, пользователь `deploy`, клон репо, генерация `.env`, первый запуск, сертификат Let’s Encrypt и таймер автопродления |
-| **Deploy — LuxVPS** | каждый push в `main` | сборка образов → GHCR → `pull` и `up -d` на сервере → health check → автооткат при падении |
+| **Deploy — LuxVPS** | каждый push в `main` | CI-гейт (тесты + сборка образов) → сборка образов в GHCR → бэкап БД → `pull` и `up -d` на сервере → health check API и web → внешний smoke-тест → автооткат при падении |
 
 Сборка идёт только в CI: Spring Boot и Next.js собираются в Actions, пушатся в GHCR,
 а VPS только тянет готовые образы. Сборка на сервере съедает память и роняет живой сайт.
+
+`ci.yml` вызывается из `deploy.yml` через `workflow_call`, поэтому в прод не может
+уехать коммит с падающими тестами. На push в `main` собственного триггера у CI нет —
+иначе один и тот же коммит проверялся бы дважды.
 
 ## Что нужно сделать руками (один раз, ~5 минут)
 
 1. Создать VPS на LuxVPS: Ubuntu 22.04/24.04, минимум 2 vCPU / 4 GB RAM / 40 GB.
 2. Направить A-запись домена на IP сервера (без этого Let’s Encrypt не выдаст сертификат).
 3. Добавить секреты и переменные: Settings → Secrets and variables → Actions.
+4. Включить branch protection на `main`: required status checks
+   (`Backend — mvn verify`, `Frontend — lint, typecheck, build`, `Docker image — api`,
+   `Docker image — web`) и запрет прямого push.
 
 Больше ничего вручную не требуется: ни `apt install`, ни `docker`, ни `git clone`, ни `.env`, ни certbot.
 
@@ -39,20 +46,23 @@ provision генерирует их на сервере через `openssl rand
 
 | Имя | Значение |
 |---|---|
-| `PUBLIC_ORIGIN` | `https://qareerquest.com` — вшивается в клиентский бандл при сборке |
+| `PUBLIC_ORIGIN` | `https://qareerquest.com` — вшивается в клиентский бандл при сборке и используется во внешнем smoke-тесте |
 | `MEDIA_PUBLIC_BASE_URL` | публичный домен хранилища картинок |
 | `AUTH_ENABLED` | `true` |
 | `ADMIN_EMAIL` | почта первого админа |
 | `DEPLOY_PATH` | необязательно, по умолчанию `/opt/quetion-site` |
 | `DEPLOY_USER` | необязательно, по умолчанию `deploy` |
 | `HEALTH_URL` | необязательно, по умолчанию `http://127.0.0.1/api/actuator/health` |
+| `WEB_HEALTH_URL` | необязательно, по умолчанию `http://127.0.0.1/` |
+| `SKIP_DB_BACKUP` | необязательно, `true` отключает дамп перед выкатом |
 
 ## Запуск
 
 1. Actions → **Provision — LuxVPS** → Run workflow. Указать домен и e-mail для Let’s Encrypt,
    ветку оставить `main` (или указать тестовую до мержа).
    Первый запуск собирает образы на сервере, потому что в GHCR ещё пусто — 10–20 минут.
-2. Дальше ничего делать не надо: каждый push в `main` сам собирает, пушит и выкатывает.
+2. Дальше ничего делать не надо: каждый push в `main` сам прогоняет тесты, собирает,
+   пушит и выкатывает.
 
 Повторный запуск provision безопасен и идемпотентен: пароли в `.env` не перегенерируются,
 база и тома не трогаются, сертификат перевыпускается только при необходимости
@@ -74,25 +84,40 @@ provision генерирует их на сервере через `openssl rand
 
 Проверить таймер: `systemctl list-timers qareerquest-tls-renew.timer`.
 
+## Проверки безопасности в CI
+
+- `codeql.yml` — статический анализ `java-kotlin` и `javascript-typescript`;
+- `secret-scan.yml` — gitleaks по всей истории;
+- Trivy в `ci.yml` — сканирование собранных образов: `CRITICAL` с доступным
+  обновлением пакета валит сборку, `HIGH` остаётся отчётом в логах;
+- `dependabot.yml` — обновления Maven, npm, Docker и GitHub Actions.
+
 ## Откат
 
 Actions → **Deploy — LuxVPS** → Run workflow → поле `image_tag` = short SHA рабочего релиза.
+При указанном `image_tag` CI-гейт пропускается: образ уже собран и проверен, важнее
+скорость возврата на рабочую версию.
+
 Если health check после выката не прошёл, деплой сам поднимает предыдущие образы
-и выводит последние 200 строк логов `api` и `web`.
+и выводит последние 200 строк логов `api` и `web`. Если предыдущие образы определить
+не удалось, в логе будет `::warning::` — тогда нужен ручной запуск с рабочим `image_tag`.
 
 ⚠️ Откат образа не откатывает схему БД: Liquibase-миграции применяются при старте `api`.
-Перед ломающими миграциями снимай бэкап: `scripts/backup-db.sh` (см. `docs/backup.md`).
+Перед каждым выкатом деплой сам снимает дамп через `scripts/backup-db.sh`
+(см. `docs/backup.md`); восстановление — `scripts/restore-db.sh`.
 
 ## Файлы
 
 | Файл | Роль |
 |---|---|
+| `.github/workflows/ci.yml` | тесты, сборка образов, Trivy; reusable-гейт для деплоя |
 | `.github/workflows/provision.yml` | первичная настройка сервера |
 | `.github/workflows/deploy.yml` | сборка в GHCR и выкат |
 | `scripts/provision-server.sh` | идемпотентный bootstrap VPS |
 | `scripts/setup-tls.sh` | выпуск сертификата и включение 443 |
 | `scripts/renew-tls.sh` | продление сертификата по таймеру |
 | `scripts/render-nginx-conf.sh` | генерация `nginx.effective.conf` |
+| `scripts/backup-db.sh` | дамп PostgreSQL перед выкатом |
 | `docker-compose.prod.yml` | тома nginx и TLS |
 | `docker-compose.images.yml` | готовые образы из GHCR вместо сборки |
 
@@ -100,9 +125,13 @@ Actions → **Deploy — LuxVPS** → Run workflow → поле `image_tag` = sh
 
 - Требуется Docker Compose v2.24+ — из-за `!reset` в `docker-compose.images.yml`.
   Скрипт установки Docker с get.docker.com ставит актуальную версию.
-- Автооткат опирается на имена контейнеров `devprep-api-1` / `devprep-web-1`
-  (имя проекта `devprep` из `docker-compose.yml`).
+- `frontend` ставит зависимости через `npm install`, а не `npm ci`: лок в репозитории
+  рассинхронизирован с `package.json`. До коммита актуального `package-lock.json`
+  сборки CI и прода не гарантированно идентичны.
+- Сторонние actions (`appleboy/ssh-action`, `appleboy/scp-action`,
+  `gitleaks/gitleaks-action`) подключены по тегу, а не по commit SHA, хотя имеют
+  доступ к SSH-секретам. Пиннинг по SHA — отдельная задача.
+- Первичный provision подключается под root и не закрывает парольный вход
+  (`PasswordAuthentication`, `PermitRootLogin`) — hardening SSH пока вручную.
 - Сертификат выпускается только на указанный домен без `www`.
   Для второго имени нужно добавить ещё один `-d` в `scripts/setup-tls.sh`.
-- Первичный provision подключается под root. Если root-доступ закрыт,
-  задай `LUXVPS_ROOT_USER` с sudo-правами и запускай скрипт через sudo.

@@ -20,9 +20,24 @@ permissions:
   contents: read
 
 jobs:
+  # Гейт: тесты и сборка образов из ci.yml выполняются до пуша в GHCR.
+  # Без этого push в main запускал deploy и CI параллельно, и в прод мог уехать
+  # коммит с падающими тестами.
+  ci:
+    name: CI gate
+    # Ручной откат на уже собранный тег ничего не пересобирает — гонять тесты
+    # заново не нужно, важнее скорость возврата на рабочую версию.
+    if: inputs.image_tag == ''
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build-push:
     name: Build and push images
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [ci]
+    if: always() && (needs.ci.result == 'success' || needs.ci.result == 'skipped')
     permissions:
       contents: read
       packages: write
@@ -35,8 +50,10 @@ jobs:
 
       - name: Resolve image tag
         id: vars
+        env:
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          TAG="${{ inputs.image_tag }}"
+          TAG="$INPUT_IMAGE_TAG"
           if [ -z "$TAG" ]; then TAG="$(git rev-parse --short HEAD)"; fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "api_image=ghcr.io/${{ github.repository }}/api:$TAG" >> "$GITHUB_OUTPUT"
@@ -84,6 +101,7 @@ jobs:
   deploy:
     name: Deploy to LuxVPS
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     needs: build-push
     environment:
       name: production
@@ -97,9 +115,9 @@ jobs:
           password: ${{ secrets.LUXVPS_SSH_PASSWORD || secrets.LUXVPS_ROOT_PASSWORD }}
           key: ${{ secrets.LUXVPS_SSH_KEY }}
           port: ${{ secrets.LUXVPS_PORT || 22 }}
-          command_timeout: 20m
+          command_timeout: 25m
           script_stop: true
-          envs: DEPLOY_PATH,GIT_SHA,API_IMAGE,WEB_IMAGE,GHCR_USER,GHCR_TOKEN,HEALTH_URL
+          envs: DEPLOY_PATH,GIT_SHA,API_IMAGE,WEB_IMAGE,GHCR_USER,GHCR_TOKEN,HEALTH_URL,WEB_HEALTH_URL,SKIP_DB_BACKUP
           script: |
             set -euo pipefail
 
@@ -121,19 +139,52 @@ jobs:
             export API_IMAGE WEB_IMAGE
             COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.images.yml"
 
-            # Запоминаем текущие образы для автоотката.
-            PREV_API="$(docker inspect --format='{{.Config.Image}}' devprep-api-1 2>/dev/null || true)"
-            PREV_WEB="$(docker inspect --format='{{.Config.Image}}' devprep-web-1 2>/dev/null || true)"
+            # Бэкап до миграций, а не после: автооткат возвращает предыдущие образы,
+            # но Liquibase уже успел изменить схему, и без дампа откатывать нечего.
+            if [ "${SKIP_DB_BACKUP:-false}" = "true" ]; then
+              echo "Бэкап пропущен по SKIP_DB_BACKUP=true"
+            elif bash scripts/backup-db.sh; then
+              echo "Дамп БД снят"
+            else
+              echo "::warning::Бэкап БД не удался — выкат продолжается, но откат схемы будет невозможен"
+            fi
+
+            # Предыдущие образы для автоотката. Имена контейнеров не хардкодим:
+            # они зависят от имени проекта и схемы нумерации compose.
+            prev_image() {
+              cid="$($COMPOSE ps -q "$1" 2>/dev/null || true)"
+              [ -n "$cid" ] || return 0
+              docker inspect --format='{{.Config.Image}}' "$cid" 2>/dev/null || true
+            }
+
+            PREV_API="$(prev_image api)"
+            PREV_WEB="$(prev_image web)"
 
             $COMPOSE pull api web
             $COMPOSE up -d --remove-orphans
 
-            # Liquibase-миграции и старт JVM занимают время — ждём здоровья API.
-            ok=0
-            for i in $(seq 1 60); do
-              if curl -fsS --max-time 5 "$HEALTH_URL" >/dev/null; then ok=1; break; fi
-              sleep 5
-            done
+            # Liquibase-миграции и старт JVM занимают время — ждём здоровья.
+            wait_ok() {
+              url="$1"
+              name="$2"
+              for _ in $(seq 1 60); do
+                if curl -fsS --max-time 5 -o /dev/null "$url"; then
+                  echo "$name отвечает"
+                  return 0
+                fi
+                sleep 5
+              done
+              echo "::error::$name не ответил за 5 минут ($url)"
+              return 1
+            }
+
+            # Проверяем и API, и web: раньше лежащий Next.js считался успешным выкатом,
+            # потому что actuator отвечал.
+            ok=1
+            wait_ok "$HEALTH_URL" "API" || ok=0
+            if [ "$ok" -eq 1 ]; then
+              wait_ok "$WEB_HEALTH_URL" "Web" || ok=0
+            fi
 
             if [ "$ok" -ne 1 ]; then
               echo "::error::Health check не прошёл, откатываемся"
@@ -141,6 +192,8 @@ jobs:
               if [ -n "$PREV_API" ] && [ -n "$PREV_WEB" ]; then
                 API_IMAGE="$PREV_API" WEB_IMAGE="$PREV_WEB" $COMPOSE up -d
                 echo "Откат на $PREV_API / $PREV_WEB выполнен"
+              else
+                echo "::warning::Предыдущие образы не определены (PREV_API='$PREV_API', PREV_WEB='$PREV_WEB') — автооткат невозможен, нужен ручной запуск с рабочим image_tag"
               fi
               exit 1
             fi
@@ -156,3 +209,36 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
           HEALTH_URL: ${{ vars.HEALTH_URL || 'http://127.0.0.1/api/actuator/health' }}
+          WEB_HEALTH_URL: ${{ vars.WEB_HEALTH_URL || 'http://127.0.0.1/' }}
+          SKIP_DB_BACKUP: ${{ vars.SKIP_DB_BACKUP || 'false' }}
+
+      # Локальный health check не видит проблем с DNS, TLS и firewall,
+      # поэтому после выката дёргаем сайт снаружи.
+      - name: Внешний smoke-тест
+        if: vars.PUBLIC_ORIGIN != ''
+        env:
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$PUBLIC_ORIGIN" || echo 000)"
+            if [ "$code" = "200" ]; then
+              echo "$PUBLIC_ORIGIN отвечает 200"
+              exit 0
+            fi
+            echo "попытка $i: код $code"
+            sleep 10
+          done
+          echo "::error::$PUBLIC_ORIGIN недоступен снаружи после успешного локального health check"
+          exit 1
+
+      - name: Итог в summary
+        if: always()
+        run: |
+          {
+            echo "### Деплой ${{ needs.build-push.outputs.tag }}"
+            echo ""
+            echo "- api: \`${{ needs.build-push.outputs.api_image }}\`"
+            echo "- web: \`${{ needs.build-push.outputs.web_image }}\`"
+            echo "- результат: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
