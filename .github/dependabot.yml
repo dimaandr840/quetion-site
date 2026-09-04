@@ -1,35 +1,69 @@
+# Конфиг читается только с дефолтной ветки. Поэтому первый же прогон после
+# мерджа в main открывает PR на весь накопленный долг сразу — у нас это было 18 PR.
+#
+# Главное, что стоит понимать про open-pull-requests-limit: он считается
+# НЕЗАВИСИМО для каждой записи updates. Пять экосистем по 5 — это потолок 25 PR,
+# а не 5. Здесь лимиты снижены и minor/patch собраны в группы, чтобы рутина приходила
+# одним PR на экосистему, а мажорные обновления — по одному и осознанно.
+#
+# security-обновления специально НЕ группируются (applies-to: version-updates):
+# заплатка по CVE должна ехать отдельно и быстро, а не ждать ревью пачки из десяти
+# несвязанных библиотек.
+#
+# Важно про ignore: Dependabot перестаёт предлагать такие версии совсем, включая
+# security-обновления. Поэтому в ignore попадают только мажоры и только там, где есть
+# причина в комментарии. Каждый такой пункт — техдолг, а не решение навсегда.
+
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /backend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 3
     commit-message:
       prefix: "deps(backend)"
     groups:
-      spring:
-        patterns:
-          - "org.springframework*"
-          - "io.jsonwebtoken*"
+      backend-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # meilisearch-java объявляет okhttp диапазоном [4.10.0,5.0.0), а в 5.x часть
+      # классов вынесена в артефакт okhttp-jvm — SDK падает в рантайме с
+      # NoClassDefFoundError: okhttp3/MediaType. Подробности — в комментарии backend/pom.xml.
+      # Снять, когда meilisearch-java начнёт поддерживать okhttp 5.x.
+      - dependency-name: com.squareup.okhttp3:okhttp
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 3
     commit-message:
       prefix: "deps(frontend)"
     groups:
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react*"
-      next:
-        patterns:
-          - "next"
-          - "eslint-config-next"
+      frontend-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Мажор @types/node обязан совпадать с мажором Node в ci.yml и frontend/Dockerfile.
+      # Иначе типы обещают API, которого нет в рантайме, и typecheck проходит на коде,
+      # который упадёт в проде. Поднимается вручную вместе с Node.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: docker
     directories:
@@ -37,12 +71,46 @@ updates:
       - /frontend
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 2
     commit-message:
       prefix: "deps(docker)"
+    groups:
+      base-images:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Мажор базового образа — это смена версии JDK или Node, а не обновление
+      # зависимости. Его нельзя делать в отрыве от maven.compiler.release в pom.xml,
+      # версии Node в ci.yml и поддерживаемых версий Spring Boot / Next.js.
+      - dependency-name: eclipse-temurin
+        update-types:
+          - version-update:semver-major
+      - dependency-name: maven
+        update-types:
+          - version-update:semver-major
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 2
     commit-message:
       prefix: "ci"
+    groups:
+      # Actions собираются в один PR целиком, вместе с мажорами: дифф — это
+      # одна строка на action, а ревью всё равно сводится к чтению их changelog.
+      # Держать четыре отдельных PR ради четырёх строк смысла нет.
+      actions:
+        patterns:
+          - "*"
