@@ -1,14 +1,18 @@
 name: CI
 
+# Триггера на push в main здесь нет намеренно: на main этот же workflow
+# вызывается из deploy.yml через workflow_call и служит гейтом деплоя.
+# Иначе один и тот же коммит проверялся бы дважды.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Отменяем только прогоны на PR. На main прогон — гейт деплоя,
+  # и его отмена сняла бы защиту от выката непротестированного кода.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -17,6 +21,7 @@ jobs:
   backend:
     name: Backend — mvn verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
@@ -45,6 +50,7 @@ jobs:
   frontend:
     name: Frontend — lint, typecheck, build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -58,9 +64,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # npm ci требует лок, синхронный с package.json, а в репо он отстаёт
-      # (нет @opentelemetry/api, @vercel/otel, prom-client). До коммита
-      # обновлённого package-lock.json ставим через npm install.
+      # TODO(lockfile): вернуть `npm ci`. npm ci требует лок, синхронный с
+      # package.json, а в репо он отстаёт (нет @opentelemetry/api, @vercel/otel,
+      # prom-client). Пока стоит npm install, сборки CI и прода не гарантированно
+      # идентичны — это единственное оставшееся отступление от воспроизводимости.
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
@@ -81,11 +88,19 @@ jobs:
   docker:
     name: Docker image — ${{ matrix.service }}
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
+    timeout-minutes: 30
+    # Образ собирается независимо от тестов: падение теста не должно скрывать
+    # поломку Dockerfile, а фидбэк приходит параллельно.
     strategy:
       fail-fast: false
       matrix:
-        service: [backend, frontend]
+        include:
+          # service совпадает с именем образа в GHCR и с cache-scope в deploy.yml,
+          # поэтому деплой после мержа переиспользует кэш этой сборки.
+          - service: api
+            context: backend
+          - service: web
+            context: frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -94,9 +109,39 @@ jobs:
       - name: Build image (no push)
         uses: docker/build-push-action@v6
         with:
-          context: ./${{ matrix.service }}
-          file: ./${{ matrix.service }}/Dockerfile
+          context: ./${{ matrix.context }}
+          file: ./${{ matrix.context }}/Dockerfile
           push: false
+          load: true
           tags: quetion-site-${{ matrix.service }}:ci
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # Отчёт по всему, что нашлось: HIGH не валит сборку, потому что в базовых
+      # образах он появляется быстрее, чем выходят патчи.
+      - name: Trivy — отчёт (HIGH, CRITICAL)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --no-progress \
+              --exit-code 0 \
+              "quetion-site-${{ matrix.service }}:ci"
+
+      # А вот CRITICAL, для которого уже есть исправленная версия пакета, —
+      # это блокер: обновиться нечего мешает.
+      - name: Trivy — гейт (CRITICAL с доступным фиксом)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity CRITICAL \
+              --ignore-unfixed \
+              --no-progress \
+              --exit-code 1 \
+              "quetion-site-${{ matrix.service }}:ci"
