@@ -14,6 +14,9 @@ const COLLAPSED_PROFESSIONS = 6;
 /** С какого размера списка появляется поиск внутри группы. */
 const SEARCHABLE_FROM = 8;
 
+/** Пустой список со стабильной ссылкой: иначе зависимости useMemo меняются каждый рендер. */
+const NO_PROFESSIONS: QuestionFacets["professions"] = [];
+
 const LEVEL_DOT: Record<Level, string> = {
   Junior: styles.dotJunior,
   Middle: styles.dotMiddle,
@@ -64,7 +67,10 @@ export function QuestionFilters({
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const professionFacets = showProfessions ? facets.professions : [];
+  const professionFacets = useMemo(
+    () => (showProfessions ? facets.professions : NO_PROFESSIONS),
+    [showProfessions, facets.professions]
+  );
   const hasProfessionSearch = professionFacets.length >= SEARCHABLE_FROM;
 
   const activeCount =

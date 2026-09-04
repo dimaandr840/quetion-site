@@ -1,0 +1,107 @@
+name: Provision — LuxVPS (первичная настройка сервера)
+
+# Однокнопочная подготовка чистого VPS: пакеты, swap, firewall, Docker,
+# пользователь deploy, клон репозитория, генерация .env, первый запуск и HTTPS.
+# Запускать можно повторно: скрипт идемпотентен.
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Домен (например qareerquest.com). Пусто — работать по IP без HTTPS.'
+        required: false
+        default: ''
+      letsencrypt_email:
+        description: 'E-mail для Let’s Encrypt (обязателен, если включаешь HTTPS).'
+        required: false
+        default: ''
+      enable_tls:
+        description: 'Выпустить сертификат и включить HTTPS (требует готовой A-записи домена)'
+        type: boolean
+        default: true
+      git_ref:
+        description: 'Ветка для первичной раскатки'
+        required: false
+        default: 'main'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Provision server
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve settings
+        id: cfg
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          ENABLE_TLS: ${{ inputs.enable_tls }}
+          HOST: ${{ secrets.LUXVPS_HOST }}
+        run: |
+          if [ -n "$DOMAIN" ] && [ "$ENABLE_TLS" = "true" ]; then
+            echo "public_origin=https://$DOMAIN" >> "$GITHUB_OUTPUT"
+            echo "cookie_secure=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$DOMAIN" ]; then
+            echo "public_origin=http://$DOMAIN" >> "$GITHUB_OUTPUT"
+            echo "cookie_secure=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "public_origin=http://$HOST" >> "$GITHUB_OUTPUT"
+            echo "cookie_secure=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Copy provisioning script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LUXVPS_HOST }}
+          username: ${{ secrets.LUXVPS_ROOT_USER || 'root' }}
+          password: ${{ secrets.LUXVPS_ROOT_PASSWORD }}
+          key: ${{ secrets.LUXVPS_SSH_KEY }}
+          port: ${{ secrets.LUXVPS_PORT || 22 }}
+          source: scripts/provision-server.sh
+          target: /tmp/quetion-provision
+          strip_components: 1
+
+      - name: Run provisioning
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.LUXVPS_HOST }}
+          username: ${{ secrets.LUXVPS_ROOT_USER || 'root' }}
+          password: ${{ secrets.LUXVPS_ROOT_PASSWORD }}
+          key: ${{ secrets.LUXVPS_SSH_KEY }}
+          port: ${{ secrets.LUXVPS_PORT || 22 }}
+          command_timeout: 40m
+          script_stop: true
+          envs: REPO_URL,GIT_REF,DEPLOY_PATH,DEPLOY_USER,PUBLIC_ORIGIN,COOKIE_SECURE,DOMAIN,LETSENCRYPT_EMAIL,ENABLE_TLS,ADMIN_EMAIL,ADMIN_PASSWORD,GHCR_USER,GHCR_TOKEN,API_IMAGE,WEB_IMAGE
+          script: bash /tmp/quetion-provision/provision-server.sh
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          GIT_REF: ${{ inputs.git_ref }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/quetion-site' }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER || 'deploy' }}
+          PUBLIC_ORIGIN: ${{ steps.cfg.outputs.public_origin }}
+          COOKIE_SECURE: ${{ steps.cfg.outputs.cookie_secure }}
+          DOMAIN: ${{ inputs.domain }}
+          LETSENCRYPT_EMAIL: ${{ inputs.letsencrypt_email }}
+          ENABLE_TLS: ${{ inputs.enable_tls }}
+          ADMIN_EMAIL: ${{ vars.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          API_IMAGE: ghcr.io/${{ github.repository }}/api:latest
+          WEB_IMAGE: ghcr.io/${{ github.repository }}/web:latest
+
+      - name: Что дальше
+        run: |
+          echo "Сервер готов: ${{ steps.cfg.outputs.public_origin }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Дальше каждый push в main выкатывается автоматически через workflow 'Deploy — LuxVPS'." >> "$GITHUB_STEP_SUMMARY"
+          echo "Не забудь выставить Repository variable PUBLIC_ORIGIN = ${{ steps.cfg.outputs.public_origin }} — она вшивается в клиентский бандл при сборке." >> "$GITHUB_STEP_SUMMARY"

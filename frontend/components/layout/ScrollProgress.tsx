@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import styles from "./ScrollProgress.module.css";
+
+/** Поддержка возможностей браузера в течение жизни страницы не меняется. */
+const subscribeNever = () => () => {};
+
+const readCssSupport = () =>
+  typeof CSS !== "undefined" &&
+  CSS.supports?.("animation-timeline", "scroll()") === true;
+
+/**
+ * На сервере считаем, что CSS справится сам: разметка не зависит от значения,
+ * а JS-фолбэк включается сразу после гидрации.
+ */
+const readCssSupportOnServer = () => true;
 
 /**
  * Индикатор прогресса чтения под шапкой.
@@ -10,18 +23,21 @@ import styles from "./ScrollProgress.module.css";
  * (animation-timeline: scroll()) — она не трогает главный поток вообще.
  * Здесь остаётся только fallback для остальных: считаем долю прокрутки
  * в rAF, чтобы не дёргать layout на каждом событии scroll.
+ *
+ * Возможности браузера — внешнее состояние: читаем их через
+ * useSyncExternalStore, иначе setState в теле эффекта даёт лишний
+ * каскадный рендер (react-hooks/set-state-in-effect).
  */
 export function ScrollProgress() {
-  const [supportsCss, setSupportsCss] = useState(true);
+  const supportsCss = useSyncExternalStore(
+    subscribeNever,
+    readCssSupport,
+    readCssSupportOnServer
+  );
   const [ratio, setRatio] = useState(0);
 
   useEffect(() => {
-    const supported =
-      typeof CSS !== "undefined" &&
-      CSS.supports?.("animation-timeline", "scroll()") === true;
-
-    setSupportsCss(supported);
-    if (supported) return;
+    if (supportsCss) return;
 
     let frame = 0;
 
@@ -36,7 +52,8 @@ export function ScrollProgress() {
       if (frame === 0) frame = window.requestAnimationFrame(update);
     };
 
-    update();
+    // Первое измерение тоже уходит в rAF: тело эффекта состояние не трогает.
+    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
@@ -44,7 +61,7 @@ export function ScrollProgress() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, []);
+  }, [supportsCss]);
 
   return (
     <div className={styles.track} aria-hidden="true">

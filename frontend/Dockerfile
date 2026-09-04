@@ -10,7 +10,9 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
     NPM_CONFIG_FETCH_TIMEOUT=600000
-RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+# npm install, а не npm ci: лок в репо рассинхронизирован с package.json,
+# и npm ci падает с EUSAGE. Вернуть npm ci после коммита актуального лока.
+RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
 
 FROM node:24-alpine AS build
 WORKDIR /app

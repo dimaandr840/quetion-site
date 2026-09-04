@@ -1,0 +1,19 @@
+# Продакшен-оверлей для LuxVPS: конфиг nginx берётся сгенерированный
+# (scripts/render-nginx-conf.sh) и добавляются тома под Let's Encrypt.
+#
+# Использование:
+#   bash scripts/render-nginx-conf.sh
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Подмена образов api/web вынесена в отдельный docker-compose.images.yml,
+# чтобы этот файл годился и для сборки на месте — первый запуск происходит,
+# когда в GHCR ещё нет ни одного образа.
+
+services:
+  nginx:
+    volumes:
+      - ./nginx/nginx.effective.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/tls:/etc/nginx/tls:ro
+      - ./nginx/letsencrypt:/etc/nginx/letsencrypt:ro
+      - ./nginx/certbot-www:/var/www/certbot:ro

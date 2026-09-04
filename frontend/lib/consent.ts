@@ -88,6 +88,23 @@ export function hasAnalyticsConsent(): boolean {
   return readConsent()?.analytics === true;
 }
 
+/**
+ * Решение уже зафиксировано? Снимок для useSyncExternalStore: cookie —
+ * внешнее по отношению к React состояние, поэтому компоненты читают его
+ * через подписку, а не через setState в эффекте.
+ */
+export function hasStoredConsent(): boolean {
+  return readConsent() !== null;
+}
+
+/** Подписка на изменение решения (в том числе из другого компонента). */
+export function subscribeConsent(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  window.addEventListener(CONSENT_CHANGE_EVENT, onChange);
+  return () => window.removeEventListener(CONSENT_CHANGE_EVENT, onChange);
+}
+
 export function openCookieSettings(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CONSENT_OPEN_EVENT));

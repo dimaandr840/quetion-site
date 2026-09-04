@@ -1,0 +1,11 @@
+# Генерируется scripts/render-nginx-conf.sh на каждом деплое.
+nginx.effective.conf
+
+# Создаёт scripts/setup-tls.sh: в конфигах зашит конкретный домен.
+tls/*.conf
+tls/redirect/*.conf
+
+# Сертификаты и ACME-челленджи — только на сервере, в git им места нет.
+letsencrypt/
+certbot-www/
+certs/*.pem
