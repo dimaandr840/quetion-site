@@ -1,14 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import {
   CONSENT_OPEN_EVENT,
-  readConsent,
+  hasStoredConsent,
+  subscribeConsent,
   writeConsent,
 } from "@/lib/consent";
 import styles from "./CookieConsent.module.css";
+
+/**
+ * На сервере считаем решение принятым: иначе баннер попадёт в кеш страницы.
+ * После гидрации useSyncExternalStore берёт настоящее значение из cookie.
+ */
+const hasStoredConsentOnServer = () => true;
 
 /**
  * Баннер согласия на cookie.
@@ -19,28 +31,36 @@ import styles from "./CookieConsent.module.css";
  * намеренно: молчание не является согласием, а баннер без решения
  * не должен исчезать.
  *
+ * Cookie согласия — внешнее состояние, поэтому она читается через
+ * useSyncExternalStore, а не переносится в состояние React эффектом:
+ * setState в теле эффекта даёт каскадный рендер (react-hooks/set-state-in-effect).
+ *
  * Никаких счётчиков компонент не грузит — он только фиксирует решение и
  * шлёт событие. Загрузку GA4 по этому событию делает
  * components/analytics/GoogleAnalytics.tsx.
  */
 export function CookieConsent() {
-  const [open, setOpen] = useState(false);
+  const decided = useSyncExternalStore(
+    subscribeConsent,
+    hasStoredConsent,
+    hasStoredConsentOnServer
+  );
+  const [reopened, setReopened] = useState(false);
 
   useEffect(() => {
-    // Состояние читается только на клиенте: иначе баннер попадёт в кеш страницы.
-    if (!readConsent()) setOpen(true);
-
-    const reopen = () => setOpen(true);
+    // Состояние меняется только в колбэке подписки, а не в теле эффекта.
+    const reopen = () => setReopened(true);
     window.addEventListener(CONSENT_OPEN_EVENT, reopen);
     return () => window.removeEventListener(CONSENT_OPEN_EVENT, reopen);
   }, []);
 
   const decide = useCallback((analytics: boolean) => {
+    // writeConsent шлёт CONSENT_CHANGE_EVENT — снимок согласия обновится сам.
     writeConsent(analytics);
-    setOpen(false);
+    setReopened(false);
   }, []);
 
-  if (!open) return null;
+  if (decided && !reopened) return null;
 
   return (
     <div
