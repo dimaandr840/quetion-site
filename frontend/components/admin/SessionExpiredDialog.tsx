@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { onSessionExpired, type SessionExpiredDetail } from "@/lib/session-recovery";
+import styles from "./SessionExpiredDialog.module.css";
 
 /**
  * Диалог «сессия истекла».
@@ -25,28 +26,21 @@ export function SessionExpiredDialog({ loginPath = "/admin/login" }: { loginPath
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="session-expired-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={styles.backdrop}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-        <h2 id="session-expired-title" className="text-lg font-semibold">
+      <div className={styles.dialog}>
+        <h2 id="session-expired-title" className={styles.title}>
           Сессия истекла
         </h2>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+        <p className={styles.text}>
           Введённые данные сохранены как черновик и будут восстановлены после повторного
           входа. Страница не была закрыта автоматически именно поэтому.
         </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            className="rounded-md px-3 py-2 text-sm"
-            onClick={() => setDetail(null)}
-          >
+        <div className={styles.actions}>
+          <button type="button" className={styles.secondary} onClick={() => setDetail(null)}>
             Остаться на странице
           </button>
-          <a
-            href={href}
-            className="rounded-md bg-neutral-900 px-3 py-2 text-sm text-white dark:bg-white dark:text-neutral-900"
-          >
+          <a href={href} className={styles.primary}>
             Войти заново
           </a>
         </div>

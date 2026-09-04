@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import styles from "./IntegrationStatusPanel.module.css";
+
+type State = "UP" | "DOWN" | "DISABLED" | "UNKNOWN";
 
 interface Dependency {
   name: string;
-  state: "UP" | "DOWN" | "DISABLED" | "UNKNOWN";
+  state: State;
   checkedAt: string | null;
   detail: string | null;
 }
@@ -17,12 +20,18 @@ const LABELS: Record<string, string> = {
   mail: "Почта (SMTP)",
 };
 
-const STATE_LABELS: Record<Dependency["state"], string> = {
+const STATE_LABELS: Record<State, string> = {
   UP: "Работает",
   DOWN: "Не работает",
   DISABLED: "Выключено",
   UNKNOWN: "Нет данных",
 };
+
+function stateClass(state: State): string {
+  if (state === "UP") return `${styles.state} ${styles.up}`;
+  if (state === "DOWN") return `${styles.state} ${styles.down}`;
+  return `${styles.state} ${styles.muted}`;
+}
 
 /**
  * Статус внешних зависимостей в админке.
@@ -50,6 +59,8 @@ export function IntegrationStatusPanel() {
     };
 
     void load();
+    // 30 секунд совпадают с интервалом проверки на бэкенде (SEARCH_HEALTH_INTERVAL):
+    // чаще опрашивать бессмысленно, данные не обновятся.
     const timer = setInterval(load, 30_000);
     return () => {
       cancelled = true;
@@ -58,36 +69,21 @@ export function IntegrationStatusPanel() {
   }, []);
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <p className={styles.error}>{error}</p>;
   }
   if (!items) {
-    return <p className="text-sm text-neutral-500">Загрузка статуса…</p>;
+    return <p className={styles.muted}>Загрузка статуса…</p>;
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className={styles.list}>
       {items.map((item) => (
-        <li
-          key={item.name}
-          className="flex items-start justify-between gap-4 rounded-md border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800"
-        >
+        <li key={item.name} className={styles.item}>
           <span>
-            <b>{LABELS[item.name] ?? item.name}</b>
-            {item.detail ? (
-              <span className="block text-neutral-500">{item.detail}</span>
-            ) : null}
+            <span className={styles.name}>{LABELS[item.name] ?? item.name}</span>
+            {item.detail ? <span className={styles.detail}>{item.detail}</span> : null}
           </span>
-          <span
-            className={
-              item.state === "DOWN"
-                ? "text-red-600"
-                : item.state === "UP"
-                  ? "text-green-600"
-                  : "text-neutral-500"
-            }
-          >
-            {STATE_LABELS[item.state]}
-          </span>
+          <span className={stateClass(item.state)}>{STATE_LABELS[item.state]}</span>
         </li>
       ))}
     </ul>
