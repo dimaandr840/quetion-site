@@ -23,7 +23,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jjwt.version>0.12.6</jjwt.version>
     <meilisearch.version>0.14.4</meilisearch.version>
-    <okhttp.version>4.12.0</okhttp.version>
+    <okhttp.version>5.5.0</okhttp.version>
     <springdoc.version>2.8.6</springdoc.version>
     <sentry.version>8.16.0</sentry.version>
     <awssdk.version>2.31.30</awssdk.version>
