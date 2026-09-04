@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { SessionExpiredDialog } from "@/components/admin/SessionExpiredDialog";
 import { ADMIN_LOGIN_PATH, PATHNAME_HEADER } from "@/lib/routes";
 import styles from "./layout.module.css";
 
@@ -27,7 +28,7 @@ export default async function AdminLayout({
 }) {
   /**
    * Страницы входа живут внутри /admin, чтобы адрес админки можно было
-   * спрятать целиком, одним сегментом. Но оболочка с шапкой и меню до
+   * спрятать целиком, одним сегментом. Но оболочку с шапкой и меню до
    * авторизации показывать нельзя: она раскрывает структуру разделов и
    * ведёт на страницы, которые всё равно ответят редиректом.
    *
@@ -51,6 +52,11 @@ export default async function AdminLayout({
           {children}
         </main>
       </div>
+      {/*
+        Живёт в layout, а не на отдельных страницах: 401 может прийти на любом
+        экране админки, а потерять несохранённую форму можно тоже на любом.
+      */}
+      <SessionExpiredDialog loginPath={ADMIN_LOGIN_PATH} />
     </div>
   );
 }
