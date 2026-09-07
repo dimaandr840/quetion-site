@@ -3,8 +3,7 @@ FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 ENV NPM_CONFIG_FETCH_RETRIES=5 NPM_CONFIG_FETCH_TIMEOUT=600000
-# Existing lockfile needs regeneration in a registry-enabled environment before switching to npm ci.
-RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 FROM node:24-alpine AS build
 WORKDIR /app
