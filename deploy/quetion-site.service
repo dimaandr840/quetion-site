@@ -1,0 +1,29 @@
+# Автозапуск production-стека после перезагрузки VPS.
+#
+# Установка:
+#   sudo install -m 644 /opt/quetion-site/deploy/quetion-site.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now quetion-site.service
+#
+# Юнит не конфликтует с restart: unless-stopped в compose: Docker сам поднимает
+# то, что работало до ребута, а юнит досоздаёт недостающие контейнеры и
+# проверяет health. Двойного старта не происходит — compose идемпотентен.
+
+[Unit]
+Description=Quetion Site production stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=deploy
+WorkingDirectory=/opt/quetion-site
+Environment=DEPLOY_PATH=/opt/quetion-site
+ExecStart=/bin/bash /opt/quetion-site/scripts/boot-up.sh
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml stop
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
