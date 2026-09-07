@@ -81,6 +81,39 @@ http://127.0.0.1:9093. Порты привязаны к локальному и�
 
 Подробности, метрики, SLO и настройка алертов — в [docs/observability.md](docs/observability.md).
 
+## Управление всем Docker-стеком
+
+Запустить или обновить все основные сервисы проекта:
+
+```bash
+docker compose up -d --build
+```
+
+Быстро перезапустить все основные сервисы без пересборки образов:
+
+```bash
+docker compose restart
+```
+
+Полностью пересоздать основные сервисы с пересборкой образов:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+Запустить приложение вместе со стеком мониторинга:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d --build
+```
+
+Перезапустить приложение и стек мониторинга без пересборки образов:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml restart
+```
+
 ## Фичефлаги
 
 Флаги хранятся в таблице `feature_flags` и меняются без пересборки образа:
