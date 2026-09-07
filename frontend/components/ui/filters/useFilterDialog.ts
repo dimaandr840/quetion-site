@@ -19,14 +19,14 @@ export function useFilterDialog(open: boolean, close: () => void,
     const trigger = triggerRef.current;
     const previousOverflow = document.body.style.overflow;
     const restored: Array<[HTMLElement, boolean]> = [];
-    // Keep our backdrop interactive; make the rest of the page inert, including other overlays.
     let branch: HTMLElement | null = panel.parentElement;
     while (branch && branch !== document.body) {
       const parent: HTMLElement | null = branch.parentElement;
       if (!parent) break;
       for (const sibling of parent.children) {
         if (sibling !== branch && sibling instanceof HTMLElement) {
-          restored.push([sibling, sibling.inert]); sibling.inert = true;
+          restored.push([sibling, sibling.inert]);
+          sibling.setAttribute("inert", "");
         }
       }
       branch = parent;
@@ -53,12 +53,13 @@ export function useFilterDialog(open: boolean, close: () => void,
     }
     document.addEventListener("keydown", onKey);
     document.addEventListener("focusin", onFocus);
+    document.body.style.overflow = "hidden";
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("focusin", onFocus);
       document.body.style.overflow = previousOverflow;
-      for (const [element, inert] of restored) element.inert = inert;
+      for (const [element, inert] of restored) element.toggleAttribute("inert", inert);
       if (trigger?.getClientRects().length) trigger.focus();
     };
   }, [active, close, panelRef, triggerRef]);

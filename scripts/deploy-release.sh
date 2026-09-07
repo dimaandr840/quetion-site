@@ -38,24 +38,22 @@ rollback_on_error() {
   if [[ -n "$PREV_API" && -n "$PREV_WEB" ]]; then
     if git reset --hard "$PREV_SHA" && bash scripts/render-nginx-conf.sh; then
       export API_IMAGE=$PREV_API WEB_IMAGE=$PREV_WEB
-      "${COMPOSE[@]}" up -d --no-deps api web nginx || true
+      "${COMPOSE[@]}" up -d --no-deps --pull never --force-recreate api web nginx || true
     fi
   fi
   echo 'Database migrations are not reversed. Inspect service health before retrying.'
   exit "$code"
 }
 git fetch --prune origin
-# Pull by digest before touching the running release/configuration.
 docker pull "$API_IMAGE"
 docker pull "$WEB_IMAGE"
 trap rollback_on_error ERR
 git reset --hard "$GIT_SHA"
 bash scripts/render-nginx-conf.sh
 "${COMPOSE[@]}" config --quiet
-# Infrastructure is provisioned separately. Never recreate postgres or remove backup/monitoring services.
-"${COMPOSE[@]}" up -d --no-deps api web nginx
+# Never recreate postgres or remove backup/monitoring services; reload nginx configuration explicitly.
+"${COMPOSE[@]}" up -d --no-deps --force-recreate api web nginx
 check_health
-# Do not overwrite an existing release manifest on a retry/build with different digests.
 if [[ -f ".releases/$GIT_SHA" ]]; then
   diff -u ".releases/$GIT_SHA" <(printf '%s\n%s\n' "$API_IMAGE" "$WEB_IMAGE")
 else
@@ -65,4 +63,4 @@ fi
 printf '%s\n' "$GIT_SHA" > .releases/current
 trap - ERR
 "${COMPOSE[@]}" ps
-# Previous images are deliberately retained for local rollback.
+# Retain previous images for offline rollback. Migrations must be backward compatible.
