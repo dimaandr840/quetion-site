@@ -1,8 +1,8 @@
 # Remediation verification
 
-Commit: `a70fa0b85794ab9bf1f06bc16c2f3d7bf9fc9138`
+Commit: `c698dd791100b4db0339075bc08ae529a786bf16`
 
-UTC: 2026-09-07T10:51:03.631295+00:00
+UTC: 2026-09-07T10:55:05.083440+00:00
 
 Automated checks only. This does not certify staging, PostgreSQL concurrency, mobile UX or production recovery.
 
@@ -15,15 +15,15 @@ Command: `mvn -B -ntp verify`
 
 ````text
 
-anager configured with UserDetailsService bean with name appUserDetailsService
-10:51:24.442 INFO  [] c.d.api.ReliabilityRegressionTest - Started ReliabilityRegressionTest in 1.55 seconds (process running for 11.752)
-10:51:24.444 INFO  [] com.devprep.api.seed.AdminBootstrap - ADMIN_EMAIL/ADMIN_PASSWORD не заданы — администратор не создан
-10:51:24.599 INFO  [] com.devprep.api.seed.SeedImporter - Импортировано: сфер=8, профессий=33, специализаций=20, тем=31, вопросов=28
-[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.038 s -- in com.devprep.api.ReliabilityRegressionTest
+nager configured with UserDetailsService bean with name appUserDetailsService
+10:55:27.855 INFO  [] c.d.api.ReliabilityRegressionTest - Started ReliabilityRegressionTest in 1.475 seconds (process running for 11.414)
+10:55:27.857 INFO  [] com.devprep.api.seed.AdminBootstrap - ADMIN_EMAIL/ADMIN_PASSWORD не заданы — администратор не создан
+10:55:27.996 INFO  [] com.devprep.api.seed.SeedImporter - Импортировано: сфер=8, профессий=33, специализаций=20, тем=31, вопросов=28
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.986 s -- in com.devprep.api.ReliabilityRegressionTest
 [INFO] Running com.devprep.api.AfterCommitTest
-10:51:30.926 INFO  [] o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [com.devprep.api.AfterCommitTest]: AfterCommitTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-10:51:30.927 INFO  [] o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration com.devprep.api.DevPrepApiApplication for test class com.devprep.api.AfterCommitTest
-[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.017 s -- in com.devprep.api.AfterCommitTest
+10:55:34.365 INFO  [] o.s.t.c.s.AnnotationConfigContextLoaderUtils - Could not detect default configuration classes for test class [com.devprep.api.AfterCommitTest]: AfterCommitTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+10:55:34.366 INFO  [] o.s.b.t.c.SpringBootTestContextBootstrapper - Found @SpringBootConfiguration com.devprep.api.DevPrepApiApplication for test class com.devprep.api.AfterCommitTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in com.devprep.api.AfterCommitTest
 [INFO] 
 [INFO] Results:
 [INFO] 
@@ -39,8 +39,8 @@ anager configured with UserDetailsService bean with name appUserDetailsService
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time:  25.874 s
-[INFO] Finished at: 2026-09-07T10:51:31Z
+[INFO] Total time:  27.181 s
+[INFO] Finished at: 2026-09-07T10:55:35Z
 [INFO] ------------------------------------------------------------------------
 
 ````
@@ -56,7 +56,7 @@ Command: `npm ci --no-audit --no-fund`
 
 npm warn deprecated prom-client@15.1.3: prom-client has been replaced by @prometheus-io/client
 
-added 367 packages in 12s
+added 367 packages in 10s
 npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
 npm warn install-scripts   unrs-resolver@1.12.2 (postinstall: node postinstall.js)
 npm warn install-scripts
@@ -66,7 +66,7 @@ npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install
 
 ## Frontend lint
 
-Exit: **1**
+Exit: **0**
 
 Command: `npm run lint`
 
@@ -76,23 +76,6 @@ Command: `npm run lint`
 
 > qareer-quest@1.0.0 lint
 > eslint .
-
-
-/home/runner/work/quetion-site/quetion-site/frontend/components/ui/filters/useFilterDialog.ts
-  29:52  error  Error: This value cannot be modified
-
-Modifying component props or hook arguments is not allowed. Consider using a local variable instead.
-
-/home/runner/work/quetion-site/quetion-site/frontend/components/ui/filters/useFilterDialog.ts:29:52
-  27 |       for (const sibling of parent.children) {
-  28 |         if (sibling !== branch && sibling instanceof HTMLElement) {
-> 29 |           restored.push([sibling, sibling.inert]); sibling.inert = true;
-     |                                                    ^^^^^^^ `panelRef` cannot be modified
-  30 |         }
-  31 |       }
-  32 |       branch = parent;  react-hooks/immutability
-
-✖ 1 problem (1 error, 0 warnings)
 
 
 ````
@@ -126,14 +109,14 @@ Command: `npm test`
 > qareer-quest@1.0.0 test
 > node --experimental-strip-types --test scripts/*.test.mjs
 
-(node:2558) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/quetion-site/quetion-site/frontend/lib/progress.ts?test=denied is not specified and it doesn't parse as CommonJS.
+(node:2574) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/quetion-site/quetion-site/frontend/lib/progress.ts?test=denied is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/runner/work/quetion-site/quetion-site/frontend/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
-✔ denied storage preserves set, change and removal in memory (40.730686ms)
-✔ quota errors do not revert new values to old disk content (2.086721ms)
-✔ storage events synchronize other tabs and clean up subscriptions (3.796795ms)
-✔ invalid storage is ignored and server snapshot stays neutral (5.313314ms)
+✔ denied storage preserves set, change and removal in memory (46.736666ms)
+✔ quota errors do not revert new values to old disk content (2.259986ms)
+✔ storage events synchronize other tabs and clean up subscriptions (2.280664ms)
+✔ invalid storage is ignored and server snapshot stays neutral (1.93001ms)
 ℹ tests 4
 ℹ suites 0
 ℹ pass 4
@@ -141,7 +124,7 @@ To eliminate this warning, add "type": "module" to /home/runner/work/quetion-sit
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 126.773061
+ℹ duration_ms 123.29725
 
 ````
 
@@ -201,13 +184,13 @@ NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml б
 [seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
 [seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
 [seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
-[seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
   Generating static pages using 3 workers (0/4) ...
+[seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
 [seo] NEXT_PUBLIC_SITE_URL не задан — canonical, Open Graph и sitemap.xml будут указывать на https://qareerquest.com
   Generating static pages using 3 workers (1/4) 
   Generating static pages using 3 workers (2/4) 
   Generating static pages using 3 workers (3/4) 
-✓ Generating static pages using 3 workers (4/4) in 176ms
+✓ Generating static pages using 3 workers (4/4) in 182ms
 Turbopack build encountered 1 warning:
 ./instrumentation.ts:27:5
 Warning: A Node.js module is loaded ('node:http' at line 27) which is not supported in the Edge Runtime.
