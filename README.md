@@ -18,28 +18,45 @@ git clone https://github.com/dimaandr840/quetion-site.git
 cd quetion-site
 ```
 
-2. Создайте файл `.env` в корне проекта:
+2. Создайте `.env` из полного шаблона:
 
-```env
-POSTGRES_PASSWORD=change-me
-JWT_SECRET=change-me-to-long-random-secret
-MEILI_MASTER_KEY=change-me-to-long-random-key
-TOTP_ENC_KEY=change-me-to-base64-32-bytes
-COOKIE_SECURE=false
-PUBLIC_ORIGIN=http://localhost
-
-# Первый администратор, если нужен автосидинг
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=change-me-admin-password
+```bash
+cp .env.example .env
 ```
 
-Для генерации ключа TOTP можно использовать:
+Шаблон [.env.example](.env.example) содержит все переменные, которые используются
+основным Docker Compose и дополнительными overlay-файлами. Значения `local-*` и
+статический `TOTP_ENC_KEY` подходят только для локальной разработки.
+
+Перед production-запуском обязательно замените как минимум:
+
+- `POSTGRES_PASSWORD`;
+- `JWT_SECRET`;
+- `MEILI_MASTER_KEY`;
+- `TOTP_ENC_KEY`;
+- `ADMIN_PASSWORD`;
+- `GRAFANA_ADMIN_PASSWORD`, если запускается мониторинг.
+
+Секреты можно сгенерировать командой (запустите отдельно для каждого ключа):
 
 ```bash
 openssl rand -base64 32
 ```
 
-В production задайте реальный домен — от него зависят canonical, Open Graph, robots.txt и sitemap.xml:
+Переменные в `.env.example` разделены по назначению:
+
+- основной запуск приложения;
+- авторизация, cookie, поиск и фичефлаги;
+- S3 / Cloudflare R2;
+- SMTP и восстановление пароля;
+- трассировка, Sentry и мониторинг;
+- резервное копирование;
+- готовые GHCR-образы;
+- TLS.
+
+Для локального запуска внешние S3, SMTP, Sentry и backup-реквизиты можно оставить
+пустыми. В production задайте реальный домен — от него зависят canonical, Open Graph,
+robots.txt и sitemap.xml:
 
 ```env
 PUBLIC_ORIGIN=https://qareerquest.com
