@@ -33,6 +33,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # База — последнее, что должно умирать от нехватки памяти на хосте,
+    # поэтому у неё есть и reservations, а не только потолок.
+    deploy:
+      resources:
+        limits:
+          cpus: "${POSTGRES_CPU_LIMIT:-1.0}"
+          memory: ${POSTGRES_MEM_LIMIT:-1g}
+        reservations:
+          memory: ${POSTGRES_MEM_RESERVATION:-512m}
     restart: unless-stopped
 
   meilisearch:
@@ -51,6 +60,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # Поиск деградирует до ILIKE в Postgres, поэтому его OOM переживаем
+    # без потери сайта — но только если он не унёс хост с собой.
+    deploy:
+      resources:
+        limits:
+          cpus: "${MEILI_CPU_LIMIT:-1.0}"
+          memory: ${MEILI_MEM_LIMIT:-1g}
     restart: unless-stopped
 
   api:
@@ -102,6 +118,8 @@ services:
       MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
       MEDIA_MAX_FILE_SIZE: ${MEDIA_MAX_FILE_SIZE:-5MB}
       # false открывает /api/admin/** без входа — только для разработки.
+      # Вне профиля dev/local/test приложение с этим флагом не стартует:
+      # см. SecurityGuardrails.
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       # Secure-cookie требует HTTPS. По умолчанию включён; для локального
       # запуска по http нужно выставить COOKIE_SECURE=false в .env.
@@ -143,6 +161,30 @@ services:
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    # HEALTHCHECK есть и в образе, но здесь он объявлен явно: при подмене образа
+    # из GHCR (docker-compose.images.yml) compose-контракт не должен зависеть от
+    # того, что кто-то не забыл директиву в Dockerfile.
+    #
+    # Проба идёт на readiness, а не на общий health: пока Liquibase гоняет
+    # миграции, контейнер запущен, но обслуживать трафик не может.
+    # 127.0.0.1 вместо localhost — чтобы busybox-wget не тратил попытку на ::1.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # Старт JVM плюс миграции: до истечения start_period неудачные пробы
+      # не считаются и контейнер не помечается unhealthy зря.
+      start_period: 90s
+    # MaxRAMPercentage=75 в образе считается от лимита контейнера, поэтому
+    # без limits JVM ориентируется на всю память хоста.
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPU_LIMIT:-2.0}"
+          memory: ${API_MEM_LIMIT:-1536m}
+        reservations:
+          memory: ${API_MEM_RESERVATION:-512m}
     depends_on:
       postgres:
         condition: service_healthy
@@ -181,8 +223,25 @@ services:
       OTEL_TRACES_SAMPLER_ARG: ${TRACING_SAMPLE_RATE:-0.1}
       # Порт с метриками Next для Prometheus (job devprep-web). Наружу не публикуется.
       METRICS_PORT: "9464"
+    # robots.txt отдаётся самим Next и не ходит в API: проба проверяет ровно
+    # то, что node-сервер жив и маршрутизация собрана, без ложных unhealthy
+    # из-за недоступного бэкенда (это диагностирует healthcheck api).
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/robots.txt"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${WEB_CPU_LIMIT:-1.0}"
+          memory: ${WEB_MEM_LIMIT:-768m}
+    # service_healthy, а не просто запуск api: иначе первые SSR-рендеры уходят
+    # в ещё не готовый бэкенд, а ISR успевает закешировать страницу с ошибкой.
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx:
@@ -201,9 +260,23 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      # -O /dev/null: в read_only-контейнере wget не может писать файл в текущий каталог.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${NGINX_CPU_LIMIT:-1.0}"
+          memory: ${NGINX_MEM_LIMIT:-256m}
     depends_on:
-      - api
-      - web
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
