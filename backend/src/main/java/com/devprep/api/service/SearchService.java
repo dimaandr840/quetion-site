@@ -8,10 +8,9 @@ import com.devprep.api.repository.QuestionRepository;
 import com.devprep.api.repository.QuestionSpecifications;
 import com.devprep.api.search.MeilisearchService;
 import com.devprep.api.search.SearchProperties;
-import com.devprep.api.web.dto.QuestionSummaryDto;
 import com.devprep.api.web.dto.SearchResponseDto;
 import com.devprep.api.web.dto.SearchResponseDto.ProfessionFacetDto;
-import java.util.ArrayList;
+import java.text.Collator;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -20,33 +19,21 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Повторяет searchQuestions/countByLevel/professionCountsFor из lib/queries.ts.
- * Основной путь — Meilisearch (опечатки + фасеты), фолбэк — ILIKE по базе.
- *
- * <p>Падение индекса не является ошибкой запроса: поиск обязан ответить 200 в упрощённом
- * режиме. Пятисотка здесь стоит дороже худшего ранжирования: на странице поиска она
- * выглядит как полностью упавший сайт.
- */
+/** All facets and filters operate on the same complete candidate set, never a page. */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class SearchService {
-
-    private static final Locale RU = Locale.forLanguageTag("ru");
-
-    /** Сколько документов минимум забираем из индекса ради фасетов по всей выдаче. */
-    private static final int MAX_HITS = 200;
-
     public static final String MODE_INDEX = "index";
     public static final String MODE_DATABASE = "database";
     public static final String MODE_FALLBACK = "fallback";
     public static final String MODE_DEEP_PAGE = "deep-page";
-
     private final QuestionRepository questionRepository;
     private final ProfessionRepository professionRepository;
     private final ContentMapper mapper;
@@ -54,183 +41,98 @@ public class SearchService {
     private final SearchProperties properties;
     private final IntegrationStatusService status;
 
-    public SearchService(
-            QuestionRepository questionRepository,
-            ProfessionRepository professionRepository,
-            ContentMapper mapper,
-            Optional<MeilisearchService> meilisearch,
-            SearchProperties properties,
-            IntegrationStatusService status) {
-        this.questionRepository = questionRepository;
-        this.professionRepository = professionRepository;
-        this.mapper = mapper;
-        this.meilisearch = meilisearch;
-        this.properties = properties;
-        this.status = status;
+    public SearchResponseDto search(String query, Set<Level> levels, Set<String> professions) {
+        return search(query, levels, professions, 0, properties.getPageSize());
     }
-
-    public SearchResponseDto search(String query, Set<Level> levels, Set<String> professionSlugs) {
-        return search(query, levels, professionSlugs, 0, properties.getPageSize());
+    public SearchResponseDto search(String query, Set<Level> levels, Set<String> professions,
+            int page, int size) {
+        return search(query, levels, professions, page, size, false, "popular");
     }
-
-    public SearchResponseDto search(
-            String query,
-            Set<Level> levels,
-            Set<String> professionSlugs,
-            int pageParam,
-            int sizeParam) {
+    public SearchResponseDto search(String query, Set<Level> levels, Set<String> professions,
+            int pageParam, int sizeParam, boolean onlyPopular, String sort) {
         String normalized = query == null ? "" : query.trim();
-        int size = normalizeSize(sizeParam);
-        int page = Math.max(0, pageParam);
-        long offset = (long) page * size;
-
-        // Meilisearch отдаёт не больше maxTotalHits документов и за этой границей молча
-        // возвращает пустую страницу вместо ошибки. Глубокую пагинацию обслуживает база.
-        boolean deepPage = offset + size > properties.getMaxTotalHits();
-        boolean indexConfigured = !normalized.isBlank() && meilisearch.isPresent();
-
-        List<Question> hits = null;
+        int size = sizeParam <= 0 ? properties.getPageSize() : Math.min(sizeParam, properties.getMaxPageSize());
+        List<Question> candidates = null;
         String mode = MODE_DATABASE;
         boolean degraded = false;
-
-        if (indexConfigured && !deepPage) {
-            if (indexKnownDown()) {
+        if (!normalized.isBlank() && meilisearch.isPresent()) {
+            if (status.searchStatus().state() == IntegrationStatusService.State.DOWN) {
                 degraded = true;
             } else {
                 try {
-                    int limit =
-                            (int)
-                                    Math.min(
-                                            properties.getMaxTotalHits(),
-                                            Math.max(MAX_HITS, offset + size));
-                    MeilisearchService.MeiliHits result =
-                            meilisearch.get().search(normalized, levels, professionSlugs, limit);
-                    hits = orderedBySlug(result.slugs());
-                    mode = MODE_INDEX;
+                    int limit = Math.max(1, properties.getMaxTotalHits());
+                    var hits = meilisearch.get().search(normalized, Set.of(), Set.of(), limit);
+                    // Estimated totals are not exact. A full window MAY be truncated:
+                    // fail over for the whole query, not just for later pages.
+                    if (hits.total() < limit && hits.slugs().size() < limit) {
+                        Map<String, Question> bySlug = new LinkedHashMap<>();
+                        questionRepository.findBySlugIn(hits.slugs()).stream()
+                                .filter(Question::isPublished).forEach(q -> bySlug.put(q.getSlug(), q));
+                        candidates = hits.slugs().stream().map(bySlug::get)
+                                .filter(java.util.Objects::nonNull).toList();
+                        mode = MODE_INDEX;
+                        status.searchServedFromIndex();
+                    } else {
+                        // Explicitly signal loss of fuzzy search rather than claiming complete index results.
+                        degraded = true;
+                    }
                     status.searchUp();
-                    status.searchServedFromIndex();
                 } catch (RuntimeException e) {
-                    log.warn("Meilisearch: поиск не удался, используем базу. {}", e.getMessage());
                     status.searchDown(e.getClass().getSimpleName());
+                    log.warn("Search index unavailable: {}", e.getClass().getSimpleName());
                     degraded = true;
                 }
             }
         }
-
-        if (hits == null) {
-            hits = fallback(normalized, levels, professionSlugs);
-            mode =
-                    degraded
-                            ? MODE_FALLBACK
-                            : (indexConfigured && deepPage ? MODE_DEEP_PAGE : MODE_DATABASE);
-            status.searchServedFromFallback();
+        if (candidates == null) {
+            candidates = questionRepository.findAll(QuestionSpecifications.search(normalized, Set.of(), Set.of()));
+            mode = degraded ? MODE_FALLBACK : MODE_DATABASE;
+            // Normal DB-only operation is not degraded traffic.
+            if (degraded) status.searchServedFromFallback();
         }
-
-        // Фасеты считаем по всей выдаче, а не по странице: иначе счётчики фильтров
-        // меняются при листании и выглядят сломанными.
-        Map<Level, Long> levelCounts = countByLevel(hits);
-        List<ProfessionFacetDto> professionCounts = professionCountsFor(hits);
-
-        List<QuestionSummaryDto> items =
-                pageOf(hits, offset, size).stream().map(mapper::toSummary).toList();
-        return new SearchResponseDto(
-                normalized,
-                hits.size(),
-                page,
-                size,
-                items,
-                levelCounts,
-                professionCounts,
-                MODE_INDEX.equals(mode),
-                mode,
-                degraded);
+        final List<Question> all = candidates;
+        Map<Level, Long> levelCounts = new EnumMap<>(Level.class);
+        for (Level level : Level.values()) levelCounts.put(level, 0L);
+        all.stream().filter(q -> matchesProfession(q, professions) && (!onlyPopular || q.isPopular()))
+                .forEach(q -> levelCounts.merge(q.getLevel(), 1L, Long::sum));
+        Map<String, Long> professionCounts = new LinkedHashMap<>();
+        all.stream().filter(q -> matchesLevel(q, levels) && (!onlyPopular || q.isPopular()))
+                .forEach(q -> professionCounts.merge(q.getProfession().getSlug(), 1L, Long::sum));
+        List<ProfessionFacetDto> facets = professionRepository.findAllByOrderBySortOrderAsc().stream()
+                .map(p -> new ProfessionFacetDto(p.getSlug(), p.getTitle(), p.getEmoji(),
+                        professionCounts.getOrDefault(p.getSlug(), 0L))).toList();
+        long popularCount = all.stream().filter(q -> matchesLevel(q, levels)
+                && matchesProfession(q, professions) && q.isPopular()).count();
+        List<Question> matched = all.stream().filter(q -> matchesLevel(q, levels)
+                        && matchesProfession(q, professions) && (!onlyPopular || q.isPopular()))
+                .sorted(order(sort)).toList();
+        int lastPage = matched.isEmpty() ? 0 : (matched.size() - 1) / size;
+        int page = Math.min(Math.max(0, pageParam), lastPage);
+        int from = page * size;
+        var items = matched.subList(from, Math.min(matched.size(), from + size))
+                .stream().map(mapper::toSummary).toList();
+        return new SearchResponseDto(normalized, matched.size(), page, size, items,
+                levelCounts, facets, MODE_INDEX.equals(mode), mode, degraded, all.size(), popularCount);
     }
-
-    /**
-     * Фоновый пробник уже знает, что индекс лежит — не тратим таймаут на каждый запрос
-     * пользователя. Именно ожидание таймаута превращает падение поиска в деградацию всего
-     * сайта.
-     */
-    private boolean indexKnownDown() {
-        return status.searchStatus().state() == IntegrationStatusService.State.DOWN;
+    private static boolean matchesLevel(Question q, Set<Level> levels) {
+        return levels.isEmpty() || levels.contains(q.getLevel());
     }
-
-    private int normalizeSize(int requested) {
-        if (requested <= 0) {
-            return properties.getPageSize();
+    private static boolean matchesProfession(Question q, Set<String> professions) {
+        return professions.isEmpty() || professions.contains(q.getProfession().getSlug());
+    }
+    private static Comparator<Question> order(String sort) {
+        Comparator<Question> tie = Comparator.comparing(Question::getId);
+        if ("alpha".equals(sort)) {
+            Collator ru = Collator.getInstance(Locale.forLanguageTag("ru"));
+            return Comparator.comparing(Question::getTitle, (String a, String b) -> ru.compare(a, b)).thenComparing(tie);
         }
-        return Math.min(requested, properties.getMaxPageSize());
-    }
-
-    private static List<Question> pageOf(List<Question> all, long offset, int size) {
-        if (offset >= all.size()) {
-            return List.of();
+        if ("level".equals(sort)) {
+            return Comparator.comparingInt((Question q) -> switch (q.getLevel().name().toLowerCase(Locale.ROOT)) {
+                case "junior" -> 0;
+                case "middle" -> 1;
+                default -> 2;
+            }).thenComparing(tie);
         }
-        int from = (int) offset;
-        int to = (int) Math.min(all.size(), offset + size);
-        return all.subList(from, to);
-    }
-
-    /**
-     * Фолбэк: фильтры и подстрочный поиск делает база, но порядок и точное совпадение подстроки
-     * дополнительно проверяются в памяти — так поведение совпадает с фронтендом
-     * (toLocaleLowerCase("ru") + includes).
-     */
-    private List<Question> fallback(String query, Set<Level> levels, Set<String> professionSlugs) {
-        List<Question> candidates =
-                questionRepository.findAll(
-                        QuestionSpecifications.search(query, levels, professionSlugs));
-        String needle = query.toLowerCase(RU);
-        return candidates.stream()
-                .filter(question -> needle.isBlank() || haystack(question).contains(needle))
-                .sorted(Comparator.comparing(Question::getId))
-                .toList();
-    }
-
-    private String haystack(Question question) {
-        List<String> parts = new ArrayList<>();
-        parts.add(question.getTitle());
-        parts.add(question.getSnippet());
-        parts.add(question.getTldr());
-        parts.addAll(question.getTags());
-        parts.add(mapper.path(question));
-        return String.join(" ", parts).toLowerCase(RU);
-    }
-
-    private List<Question> orderedBySlug(List<String> slugs) {
-        if (slugs.isEmpty()) {
-            return List.of();
-        }
-        Map<String, Question> bySlug = new LinkedHashMap<>();
-        questionRepository.findBySlugIn(slugs).forEach(q -> bySlug.put(q.getSlug(), q));
-        return slugs.stream().map(bySlug::get).filter(java.util.Objects::nonNull).toList();
-    }
-
-    /** Все три уровня присутствуют всегда, включая нулевые — как в countByLevel. */
-    private Map<Level, Long> countByLevel(List<Question> questions) {
-        Map<Level, Long> counts = new EnumMap<>(Level.class);
-        for (Level level : Level.values()) {
-            counts.put(level, 0L);
-        }
-        questions.forEach(question -> counts.merge(question.getLevel(), 1L, Long::sum));
-        return counts;
-    }
-
-    /** Нулевые профессии отбрасываются — как в professionCountsFor. */
-    private List<ProfessionFacetDto> professionCountsFor(List<Question> questions) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        questions.forEach(
-                question -> counts.merge(question.getProfession().getSlug(), 1L, Long::sum));
-
-        return professionRepository.findAllByOrderBySortOrderAsc().stream()
-                .filter(profession -> counts.getOrDefault(profession.getSlug(), 0L) > 0)
-                .map(
-                        profession ->
-                                new ProfessionFacetDto(
-                                        profession.getSlug(),
-                                        profession.getTitle(),
-                                        profession.getEmoji(),
-                                        counts.get(profession.getSlug())))
-                .toList();
+        return Comparator.comparing(Question::isPopular).reversed().thenComparing(tie);
     }
 }
