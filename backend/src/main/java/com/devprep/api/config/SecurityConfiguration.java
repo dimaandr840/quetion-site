@@ -5,6 +5,7 @@ import com.devprep.api.security.JwtAuthenticationFilter;
 import jakarta.servlet.DispatcherType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * <p>Чтение контента (профессии, категории, вопросы, поиск) намеренно публично — это открытый
  * справочник, который читает Next.js без токена. Любая запись требует ROLE_ADMIN.
  *
+ * <p>Публичной регистрации нет: {@code /api/auth/register} — админская ручка. Формы регистрации на
+ * сайте не существует, а открытый эндпоинт позволял бы копить учётки в базе запросом из консоли.
+ *
  * <p>Аутентификация — по httpOnly cookie, поэтому CSRF-защита включена: браузер прикладывает cookie
  * автоматически, и без double-submit токена сторонний сайт мог бы выполнить запись от имени
  * администратора. Токен лежит в читаемой JS cookie {@code XSRF-TOKEN}, клиент дублирует его в
@@ -47,18 +51,21 @@ public class SecurityConfiguration {
     private final SecurityProperties securityProperties;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(
+            HttpSecurity http,
+            @Value("${springdoc.api-docs.enabled:false}") boolean apiDocsEnabled)
+            throws Exception {
         http.csrf(
                         csrf ->
                                 csrf.csrfTokenRepository(
                                                 CookieCsrfTokenRepository.withHttpOnlyFalse())
                                         .csrfTokenRequestHandler(csrfTokenRequestHandler())
-                                        // Вход/регистрация/ротация происходят до появления
-                                        // CSRF-токена, а cookie с SameSite=Strict в кросс-сайтовый
-                                        // запрос всё равно не попадёт.
+                                        // Вход/ротация происходят до появления CSRF-токена, а
+                                        // cookie с SameSite=Strict в кросс-сайтовый запрос всё
+                                        // равно не попадёт. Регистрации в этом списке нет: её
+                                        // вызывает уже вошедший админ, у которого токен есть.
                                         .ignoringRequestMatchers(
                                                 "/api/auth/login",
-                                                "/api/auth/register",
                                                 "/api/auth/refresh",
                                                 "/api/auth/totp/verify"))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -95,7 +102,6 @@ public class SecurityConfiguration {
                                     .permitAll()
                                     .requestMatchers(
                                             "/api/auth/login",
-                                            "/api/auth/register",
                                             "/api/auth/refresh",
                                             "/api/auth/totp/verify",
                                             "/api/auth/logout",
@@ -110,18 +116,30 @@ public class SecurityConfiguration {
                                             "/actuator/health",
                                             "/actuator/health/**",
                                             "/actuator/info")
-                                    .permitAll()
-                                    .requestMatchers("/api/docs/**", "/api/openapi.json")
                                     .permitAll();
 
+                            // Схема и Swagger UI открыты только там, где springdoc включён
+                            // явно (SPRINGDOC_ENABLED=true, локальная разработка). В проде
+                            // флаг выключен, и без этого правила путь оставался бы
+                            // permitAll на случай, если springdoc когда-нибудь включат
+                            // обратно, не вспомнив про цепочку безопасности.
+                            if (apiDocsEnabled) {
+                                auth.requestMatchers("/api/docs/**", "/api/openapi.json")
+                                        .permitAll();
+                            } else {
+                                auth.requestMatchers("/api/docs/**", "/api/openapi.json")
+                                        .denyAll();
+                            }
+
                             if (securityProperties.isAuthEnabled()) {
-                                auth.requestMatchers("/api/admin/**")
+                                auth.requestMatchers("/api/admin/**", "/api/auth/register")
                                         .hasAuthority(Role.ROLE_ADMIN.name())
                                         .requestMatchers("/api/me/**", "/api/auth/password")
                                         .authenticated();
                             } else {
                                 auth.requestMatchers(
                                                 "/api/admin/**",
+                                                "/api/auth/register",
                                                 "/api/me/**",
                                                 "/api/auth/password")
                                         .permitAll();

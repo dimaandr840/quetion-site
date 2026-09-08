@@ -6,6 +6,7 @@ import com.devprep.api.service.AuthService;
 import com.devprep.api.service.PasswordResetService;
 import com.devprep.api.web.dto.AuthRequests;
 import com.devprep.api.web.dto.AuthResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +35,21 @@ public class AuthController {
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
 
+    /**
+     * Создание учётной записи. Публичной регистрации на сайте нет: справочник читают анонимно, а
+     * входить в закрытую часть должен только администратор. Поэтому ручка доступна лишь уже
+     * вошедшему админу — это единственный способ завести коллегу, не трогая базу руками.
+     *
+     * <p>{@code @PreAuthorize} дублирует URL-правило из {@link
+     * com.devprep.api.config.SecurityConfiguration}: правило можно случайно потерять при
+     * рефакторинге цепочки, а аннотация останется рядом с кодом. Ссылка на {@code authz}
+     * сохраняет режим разработки с {@code devprep.security.auth-enabled=false}.
+     *
+     * <p>{@code @Hidden} убирает ручку из OpenAPI: схема — готовая карта для сканеров, а
+     * администратору она не нужна.
+     */
+    @Hidden
+    @PreAuthorize("!@authz.authRequired() or hasAuthority('ROLE_ADMIN')")
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(
             @Valid @RequestBody AuthRequests.Register request, HttpServletRequest httpRequest) {
