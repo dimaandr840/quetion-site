@@ -5,9 +5,11 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.devprep.api.repository.AppUserRepository;
 import com.devprep.api.repository.CategoryRepository;
 import com.devprep.api.repository.ProfessionRepository;
 import com.devprep.api.repository.QuestionRepository;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,6 +30,7 @@ class ApiSmokeTest {
     @Autowired private ProfessionRepository professionRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private QuestionRepository questionRepository;
+    @Autowired private AppUserRepository appUserRepository;
 
     /**
      * Точные размеры сида здесь не фиксируются намеренно: контент пополняется, и
@@ -91,6 +95,41 @@ class ApiSmokeTest {
     @Test
     void adminWritesRequireCsrfToken() throws Exception {
         mockMvc.perform(delete("/api/admin/questions/{slug}", "anything"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Публичной регистрации нет: формы на сайте не существует, и запрос из консоли
+     * тоже не должен создавать учётку. Проверяем и ответ, и отсутствие строки в базе —
+     * иначе тест прошёл бы даже при 201 с последующим откатом статуса.
+     */
+    @Test
+    void registrationIsNotPublic() throws Exception {
+        long before = appUserRepository.count();
+
+        mockMvc.perform(
+                        post("/api/auth/register")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"email\":\"outsider@example.com\","
+                                                + "\"password\":\"correct-horse-battery\","
+                                                + "\"displayName\":\"Outsider\"}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(appUserRepository.count()).isEqualTo(before);
+    }
+
+    /** Регистрация без CSRF-токена тоже отбивается: ручка больше не в списке исключений. */
+    @Test
+    void registrationRequiresCsrfToken() throws Exception {
+        mockMvc.perform(
+                        post("/api/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"email\":\"outsider@example.com\","
+                                                + "\"password\":\"correct-horse-battery\","
+                                                + "\"displayName\":\"Outsider\"}"))
                 .andExpect(status().isForbidden());
     }
 }
