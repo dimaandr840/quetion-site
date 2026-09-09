@@ -1,15 +1,18 @@
 name: Deploy — LuxVPS
 
+# Деплой запускается ТОЛЬКО вручную. Автозапуск по завершению CI намеренно
+# убран: пуш в main не должен уезжать в прод сам по себе.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
+      git_ref:
+        description: 'Что выложить: ветка, тег или commit SHA. По умолчанию main. Код пересобирается.'
+        required: false
+        default: main
+        type: string
       image_tag:
-        description: 'Откат на ранее записанный релиз: полный commit SHA (40 символов). Не пересобирает код.'
-        required: true
+        description: 'Откат на ранее записанный релиз: полный commit SHA (40 символов). Если заполнено, git_ref игнорируется и код НЕ пересобирается.'
+        required: false
         type: string
 
 concurrency:
@@ -20,26 +23,46 @@ permissions:
 
 jobs:
   resolve:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.release.outputs.sha }}
+      rollback: ${{ steps.release.outputs.rollback }}
     steps:
       - id: release
         env:
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.image_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          GIT_REF: ${{ inputs.git_ref }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected full commit SHA'; exit 2; }
-          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          # Режим откката: сборки нет, берём ровно тот SHA, для которого на
+          # сервере записан файл .releases/<sha> с дайджестами образов.
+          if [ -n "${IMAGE_TAG:-}" ]; then
+            [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || {
+              echo '::error::image_tag должен быть полным commit SHA (40 hex-символов).'
+              exit 2
+            }
+            echo "sha=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+            echo 'rollback=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Обычный деплой: ветку/тег разыменовываем в полный SHA. Короткий SHA
+          # или имя ветки дальше не годятся — deploy-release.sh требует 40 hex,
+          # чтобы релиз был воспроизводим и откат ссылался на конкретный коммит.
+          REF=${GIT_REF:-main}
+          SHA=$(gh api "repos/$REPO/commits/$REF" --jq .sha)
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Не удалось определить commit SHA для '$REF'."
+            exit 2
+          }
+          echo "Выкладываем $REF -> $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo 'rollback=false' >> "$GITHUB_OUTPUT"
 
   build-push:
     needs: resolve
-    if: github.event_name == 'workflow_run'
+    if: needs.resolve.outputs.rollback != 'true'
     runs-on: ubuntu-latest
     # Тот же environment, что и у deploy: NEXT_PUBLIC_* берутся из vars.*,
     # а переменные environment недоступны job'ам без environment — без этой
@@ -98,7 +121,7 @@ jobs:
     needs: [resolve, build-push]
     if: >-
       always() && needs.resolve.result == 'success' &&
-      (github.event_name == 'workflow_dispatch' || needs.build-push.result == 'success')
+      (needs.resolve.outputs.rollback == 'true' || needs.build-push.result == 'success')
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -132,7 +155,7 @@ jobs:
           DEPLOY_SCRIPT_SHA: ${{ github.sha }}
           API_IMAGE: ${{ needs.build-push.outputs.api_image }}
           WEB_IMAGE: ${{ needs.build-push.outputs.web_image }}
-          ROLLBACK: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          ROLLBACK: ${{ needs.resolve.outputs.rollback }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
           HEALTH_ORIGIN: ${{ vars.HEALTH_ORIGIN || 'http://127.0.0.1' }}
