@@ -182,9 +182,11 @@ if [ "$ENABLE_TLS" = "true" ] && [ -n "$DOMAIN" ] && [ -n "$LETSENCRYPT_EMAIL" ]
 fi
 
 log "Проверка здоровья API"
+# Актуатор живёт в корне: у nginx есть отдельный location /actuator/health,
+# а /api/ проксируется без обрезки префикса, так что /api/actuator/health = 404.
 ok=0
 for _ in $(seq 1 60); do
-  if curl -fsS --max-time 5 http://127.0.0.1/api/actuator/health >/dev/null 2>&1; then ok=1; break; fi
+  if curl -fsS --max-time 5 http://127.0.0.1/actuator/health >/dev/null 2>&1; then ok=1; break; fi
   sleep 5
 done
 
