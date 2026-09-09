@@ -31,8 +31,12 @@ export class DataParseError extends Error {
 /** Защита от переполнения стека на самоподобных структурах. */
 const MAX_DEPTH = 64;
 
+// Sticky-регулярки вызываются только с явно выставленным lastIndex, и конец
+// совпадения читается сразу после exec: иначе состояние течёт между вызовами.
 const NUMBER_RE = /0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?/y;
 const IDENT_RE = /[A-Za-z_$][A-Za-z0-9_$]*/y;
+/** Проверка одного символа — без флага `y`, чтобы не зависеть от lastIndex. */
+const IDENT_START_RE = /[A-Za-z_$]/;
 
 /** Поля, которые нельзя записывать: присваивание испортило бы прототип. */
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -96,7 +100,7 @@ class Reader {
 			return ch === "-" ? -value : value;
 		}
 		if (ch === "." || (ch >= "0" && ch <= "9")) return this.readNumber();
-		if (IDENT_RE.test(ch)) return this.readReference();
+		if (IDENT_START_RE.test(ch)) return this.readReference();
 		this.fail(`неожидаемый символ «${ch}»: ожидаются только данные`);
 	}
 
@@ -177,9 +181,10 @@ class Reader {
 		NUMBER_RE.lastIndex = this.i;
 		const match = NUMBER_RE.exec(this.src);
 		if (!match) this.fail("некорректное число");
+		const end = NUMBER_RE.lastIndex;
 		const value = Number(match[0]);
 		if (!Number.isFinite(value)) this.fail(`некорректное число «${match[0]}»`);
-		this.i = NUMBER_RE.lastIndex;
+		this.i = end;
 		return value;
 	}
 
@@ -189,7 +194,8 @@ class Reader {
 		IDENT_RE.lastIndex = this.i;
 		const match = IDENT_RE.exec(this.src);
 		if (!match) this.fail("ожидается значение");
-		this.i = IDENT_RE.lastIndex;
+		const end = IDENT_RE.lastIndex;
+		this.i = end;
 		const name = match[0];
 
 		if (name === "true") return true;
@@ -199,15 +205,16 @@ class Reader {
 
 		this.skipTrivia();
 		const next = this.src[this.i];
-		this.i = start;
-		if (next === "(") this.fail(`вызов «${name}(…)» недопустим: нужны готовые данные`);
-		if (next === "." || next === "[") {
+		if (next === "(" || next === "." || next === "[") {
+			this.i = start;
+			if (next === "(") this.fail(`вызов «${name}(…)» недопустим: нужны готовые данные`);
 			this.fail(`обращение к свойствам «${name}» недопустимо: нужны готовые данные`);
 		}
 		if (!this.scope.has(name)) {
+			this.i = start;
 			this.fail(`неизвестное значение «${name}»: данные должны быть записаны литералами`);
 		}
-		this.i = IDENT_RE.lastIndex;
+		this.i = end;
 		return this.scope.get(name);
 	}
 

@@ -12,7 +12,7 @@ export default {
     {
       t: "Что такое JIT?",
       l: "Middle",
-      c: "JVM",
+      c: "jvm",
       g: ["jvm", "performance"],
       pop: true,
       s: [{ h: "Ответ", p: ["Компилирует байт-код в машинный."] }],
@@ -27,6 +27,28 @@ export default {
 	assert.equal(data.questions[0].pop, true);
 	assert.deepEqual(data.questions[0].g, ["jvm", "performance"]);
 	assert.equal(data.questions[0].s[0].p[0], "Компилирует байт-код в машинный.");
+});
+
+// Регресс: проверка «символ начинает имя» использовала sticky-регулярку, и из-за
+// сохранённого lastIndex любое true/false/null после других полей ломало разбор.
+test("читает true/false/null после строк, чисел и массивов", () => {
+	const source = [
+		"export default {",
+		'  a: "текст",',
+		"  b: 42,",
+		'  g: ["jvm"],",'.replace('",', '"],'),
+		"  pop: true,",
+		"  draft: false,",
+		"  note: null,",
+		"  items: [true, false, null, 1],",
+		"}",
+	].join("\n");
+
+	const data = parseDataModule(source);
+	assert.equal(data.pop, true);
+	assert.equal(data.draft, false);
+	assert.equal(data.note, null);
+	assert.deepEqual(data.items, [true, false, null, 1]);
 });
 
 test("понимает шаблонные строки, склейку, висящие запятые и комментарии", () => {
@@ -51,7 +73,7 @@ test("понимает шаблонные строки, склейку, вися
 
 test("подставляет константы файла и разворачивает через ...", () => {
 	const source = `const tags = ["jvm"];
-const base = { l: "Junior", c: "JVM" };
+const base = { l: "Junior", c: "jvm" };
 
 export default {
   questions: [{ ...base, t: "Что такое JVM?", g: tags }],
@@ -60,13 +82,12 @@ export default {
 
 	const data = parseDataModule(source);
 	assert.equal(data.questions[0].l, "Junior");
-	assert.equal(data.questions[0].c, "JVM");
+	assert.equal(data.questions[0].c, "jvm");
 	assert.deepEqual(data.questions[0].g, ["jvm"]);
 });
 
 test("не исполняет код: вызовы функций отклоняются", () => {
-	const source = 'export default { questions: buildQuestions() };';
-	assert.throws(() => parseDataModule(source), DataParseError);
+	assert.throws(() => parseDataModule("export default { questions: build() };"), DataParseError);
 });
 
 test("отклоняет обращение к свойствам и подстановки в строках", () => {
@@ -92,5 +113,8 @@ test("требует ровно один export default", () => {
 });
 
 test("не позволяет испортить прототип", () => {
-	assert.throws(() => parseDataModule('export default { "__proto__": { polluted: true } };'), DataParseError);
+	assert.throws(
+		() => parseDataModule('export default { "__proto__": { polluted: true } };'),
+		DataParseError,
+	);
 });
