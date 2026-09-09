@@ -30,8 +30,51 @@ fi
 
 log "Системные пакеты"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq git curl ca-certificates openssl ufw >/dev/null
+
+OS_NAME="неизвестно"
+OS_ID=""
+OS_VERSION=""
+if [ -r /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  OS_NAME="${PRETTY_NAME:-${NAME:-неизвестно}}"
+  OS_ID="${ID:-}"
+  OS_VERSION="${VERSION_ID:-}"
+fi
+echo "  ОС: $OS_NAME"
+
+# Предупреждаем про EOL-дистрибутивы: они больше не получают патчей
+# безопасности, а их Release-файлы просрочены.
+if [ "$OS_ID" = "debian" ] && [ -n "$OS_VERSION" ] && [ "${OS_VERSION%%.*}" -le 11 ] 2>/dev/null; then
+  echo "  ❗ $OS_NAME снят с поддержки (EOL): обновлений безопасности больше нет."
+  echo "  Рекомендуется переустановить сервер на Ubuntu 24.04 LTS и запустить provision заново."
+fi
+
+# EOL-репозитории отдают просроченные Release-файлы, и apt-get update завершается
+# кодом 100, роняя весь провижн на самом первом шаге. Разрешаем просроченные
+# подписи и не считаем частичную ошибку фатальной: главный критерий ниже —
+# реально ли установились нужные пакеты.
+APT_OPTS="-o Acquire::Check-Valid-Until=false -o Acquire::Retries=3"
+PACKAGES="git curl ca-certificates openssl ufw"
+
+if ! apt-get update -qq $APT_OPTS; then
+  echo "  ❗ apt-get update вернул ошибку (часть репозиториев недоступна или просрочена) — продолжаем"
+fi
+
+if ! apt-get install -y -qq $APT_OPTS $PACKAGES >/dev/null 2>&1; then
+  echo "  Повторная попытка установки пакетов"
+  apt-get install -y -qq $APT_OPTS --fix-missing $PACKAGES >/dev/null
+fi
+
+missing=""
+for cmd in git curl openssl ufw; do
+  command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
+done
+if [ -n "$missing" ]; then
+  echo "Не удалось установить:$missing" >&2
+  echo "Проверь /etc/apt/sources.list на сервере или переустанови ОС на Ubuntu 24.04 LTS." >&2
+  exit 1
+fi
 
 log "Swap 2 ГБ (страховка от OOM: JVM + Postgres + Meilisearch + Next.js)"
 if ! swapon --show=NAME --noheadings 2>/dev/null | grep -q '/swapfile'; then
@@ -54,6 +97,11 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 systemctl enable --now docker >/dev/null 2>&1 || true
 echo "docker compose: $(docker compose version --short 2>/dev/null || echo 'не найден')"
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Нужен Docker Compose v2 (плагин 'docker compose'), но он не установился." >&2
+  echo "Чаще всего это значит, что версия ОС больше не поддерживается Docker." >&2
+  exit 1
+fi
 
 log "Пользователь $DEPLOY_USER"
 if ! id -u "$DEPLOY_USER" >/dev/null 2>&1; then
