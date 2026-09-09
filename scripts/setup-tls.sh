@@ -167,6 +167,12 @@ server {
 
     location /actuator/health {
         proxy_pass http://devprep_api;
+        access_log off;
+    }
+
+    location /actuator/ {
+        deny all;
+        return 404;
     }
 
     # CSP для /admin и /login выдаёт сам Next.js с nonce (frontend/proxy.ts),
@@ -210,11 +216,12 @@ cat > nginx/tls/redirect/redirect.conf <<'REDIRECT'
 # Сгенерировано scripts/setup-tls.sh.
 # Из редиректа 80→443 исключены два пути:
 #   * ACME-челлендж — иначе продление сертификата упрётся в редирект;
-#   * /api/actuator/health — по нему стучится healthcheck контейнера nginx на
+#   * /actuator/health — по нему стучится healthcheck контейнера nginx на
 #     http://127.0.0.1. Через HTTPS проба падает (сертификат выписан на домен,
 #     а не на 127.0.0.1: certificate verify failed), и контейнер уходит в
-#     unhealthy при полностью рабочем сайте.
-if ($request_uri !~ ^/(?:\.well-known/acme-challenge/|api/actuator/health$)) {
+#     unhealthy при полностью рабочем сайте. Публично виден только
+#     /actuator/health, остальной actuator nginx отдаёт 404.
+if ($request_uri !~ ^/(?:\.well-known/acme-challenge/|actuator/health)) {
     return 301 https://$host$request_uri;
 }
 REDIRECT
