@@ -21,12 +21,30 @@ export API_IMAGE WEB_IMAGE
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.images.yml)
 # Actuator lives at the root: nginx has a dedicated location /actuator/health and
 # proxies /api/ without stripping the prefix, so /api/actuator/health returns 404.
+#
+# The probe must go through nginx over loopback, never over public DNS: the point
+# is to test THIS host's freshly recreated containers, not whatever the domain
+# currently resolves to. But nginx redirects HTTP to HTTPS, and curl -L follows
+# it, so probing http://127.0.0.1 ends up at https://127.0.0.1 and fails
+# certificate verification (curl exit 60) even though the release is fine.
+# Fix: keep the public hostname in the URL so TLS verifies, and pin it to
+# loopback with --resolve.
 check_health() {
-  local origin=${HEALTH_ORIGIN:-http://127.0.0.1}
+  local origin=${HEALTH_ORIGIN:-${PUBLIC_ORIGIN:-http://127.0.0.1}}
+  local host=${origin#*://}
+  host=${host%%/*}
+  host=${host%%:*}
+  local -a opts=(-fsSL)
+  if [[ "$host" == "127.0.0.1" || "$host" == "localhost" || "$host" == "[::1]" ]]; then
+    # No certificate can match a loopback literal; the hop stays on this host.
+    opts+=(--insecure)
+  else
+    opts+=(--resolve "$host:443:127.0.0.1" --resolve "$host:80:127.0.0.1")
+  fi
   for _ in $(seq 1 60); do
-    if curl -fsSL --max-time 5 "$origin/actuator/health" >/dev/null \
-      && curl -fsSL --max-time 10 "$origin/" >/dev/null \
-      && curl -fsSL --max-time 10 "$origin/search" >/dev/null; then
+    if curl "${opts[@]}" --max-time 5 "$origin/actuator/health" >/dev/null \
+      && curl "${opts[@]}" --max-time 10 "$origin/" >/dev/null \
+      && curl "${opts[@]}" --max-time 10 "$origin/search" >/dev/null; then
       return 0
     fi
     sleep 5
