@@ -96,8 +96,11 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
-          API_IMAGE: ghcr.io/${{ github.repository }}/api:latest
-          WEB_IMAGE: ghcr.io/${{ github.repository }}/web:latest
+          # Образы намеренно не передаются тегом :latest — deploy.yml его не публикует,
+          # он пушит теги по commit SHA и деплоит по digest. Скрипт сам берёт последний
+          # записанный релиз из .releases/, а если релизов ещё нет — собирает на месте.
+          API_IMAGE: ''
+          WEB_IMAGE: ''
 
       - name: Что дальше
         run: |

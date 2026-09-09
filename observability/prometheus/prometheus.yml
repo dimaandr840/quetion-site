@@ -46,3 +46,49 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["tempo:3200"]
+
+  # Нагрузка хоста: CPU, load average, RAM, swap, диск, сеть.
+  # Метка host нужна, чтобы при переезде на второй VPS не переписывать алерты.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          host: vps
+
+  # Нагрузка по контейнерам — чтобы отличить «сервер перегружен» от
+  # «один контейнер течёт по памяти».
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Доступность. Цель передаётся blackbox'у параметром target, поэтому
+  # __address__ подменяется в relabel_configs на адрес самого экспортёра.
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      # Внутренние пробы через nginx: те же три адреса, по которым
+      # scripts/deploy-release.sh решает, удался ли релиз.
+      - targets:
+          - http://nginx/api/actuator/health
+          - http://nginx/
+          - http://nginx/search
+        labels:
+          probe: internal
+
+  # Публичная проба: проверяет DNS, внешний firewall и TLS целиком.
+  # При смене домена правится только этот блок.
+  - job_name: blackbox-http-public
+    metrics_path: /probe
+    params:
+      module: [http_2xx_public]
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - https://qareerquest.com/
+        labels:
+          probe: public
+
+# relabel для обоих blackbox-джобов задаётся ниже через YAML-анкоры нельзя
+# (Prometheus читает строгую схему), поэтому он дублируется выше в каждом джобе.
