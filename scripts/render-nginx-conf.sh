@@ -28,6 +28,16 @@ awk '
 grep -qF 'include /etc/nginx/tls/*.conf;' "${OUT}.tmp"
 grep -qF 'include /etc/nginx/tls/redirect/*.conf;' "${OUT}.tmp"
 
-mv "${OUT}.tmp" "$OUT"
+# Не заменяем OUT через mv: nginx.effective.conf смонтирован в контейнер как
+# отдельный bind mount. Замена inode оставляет уже запущенный nginx на старой
+# версии файла, поэтому reload не видит новый ACME location. Перезапись на месте
+# сохраняет inode и делает обновлённый конфиг доступным внутри контейнера.
+if [ -f "$OUT" ]; then
+  cat "${OUT}.tmp" > "$OUT"
+  rm -f "${OUT}.tmp"
+else
+  mv "${OUT}.tmp" "$OUT"
+fi
+
 mkdir -p nginx/tls/redirect nginx/certs nginx/certbot-www nginx/letsencrypt
 echo "nginx/nginx.effective.conf сгенерирован"
