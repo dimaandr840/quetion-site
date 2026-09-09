@@ -16,8 +16,29 @@ mkdir -p nginx/certbot-www nginx/letsencrypt nginx/tls/redirect
 
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
-# ACME-челлендж отдаёт nginx на 80 порту (location /.well-known/acme-challenge/).
+# ACME-челлендж отдаёт nginx на 80 порту (location ^~ /.well-known/acme-challenge/).
+# Конфиг перегенерируем и перечитываем: если nginx уже был поднят со старым
+# nginx.effective.conf, без этого шага он продолжит отвечать 404 на челлендж.
+bash scripts/render-nginx-conf.sh
 $COMPOSE up -d nginx
+$COMPOSE exec -T nginx nginx -s reload 2>/dev/null || $COMPOSE restart nginx
+
+# Самопроверка webroot до обращения к Let's Encrypt: неудачные валидации
+# лимитируются (5 в час на домен), поэтому дешевле упасть здесь с понятным
+# сообщением, чем сжечь попытку и читать «Invalid response ... 404» в логе CI.
+ACME_DIR="nginx/certbot-www/.well-known/acme-challenge"
+mkdir -p "$ACME_DIR"
+PROBE="setup-tls-probe-$$"
+echo "ok" > "$ACME_DIR/$PROBE"
+PROBE_URL="http://$DOMAIN/.well-known/acme-challenge/$PROBE"
+if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$PROBE_URL" || echo 000)" != "200" ]; then
+  rm -f "$ACME_DIR/$PROBE"
+  echo "nginx не отдаёт $PROBE_URL — Let's Encrypt тоже получит ошибку." >&2
+  echo "Проверьте: A-запись $DOMAIN смотрит на этот сервер, 80/tcp открыт в ufw" >&2
+  echo "и в nginx.conf location для /.well-known/acme-challenge/ объявлен с ^~." >&2
+  exit 1
+fi
+rm -f "$ACME_DIR/$PROBE"
 
 docker run --rm \
   -v "$DEPLOY_PATH/nginx/letsencrypt:/etc/letsencrypt" \
@@ -55,6 +76,13 @@ server {
     add_header Origin-Agent-Cluster "?1" always;
     add_header Permissions-Policy "accelerometer=(), camera=(), microphone=(), geolocation=(), gyroscope=(), magnetometer=(), payment=(), usb=()" always;
 
+    # ACME-челлендж. ^~ обязателен: иначе regex-локация ~ /\. ниже имеет
+    # приоритет над префиксной и отдаёт 404, ломая автопродление.
+    location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
+        root /var/www/certbot;
+    }
+
     location ~ /\. {
         deny all;
         access_log off;
@@ -70,10 +98,6 @@ server {
 
     if ($request_method !~ ^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$) {
         return 405;
-    }
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
     }
 
     location /_next/static/ {
