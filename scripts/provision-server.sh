@@ -16,6 +16,7 @@ LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 ENABLE_TLS="${ENABLE_TLS:-false}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+YANDEX_METRIKA_ID="${YANDEX_METRIKA_ID:-}"
 GHCR_USER="${GHCR_USER:-}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
 API_IMAGE="${API_IMAGE:-}"
@@ -69,6 +70,11 @@ if [ ! -d "$DEPLOY_PATH/.git" ]; then
   sudo -u "$DEPLOY_USER" git clone --quiet "$REPO_URL" "$DEPLOY_PATH"
 fi
 cd "$DEPLOY_PATH"
+# git ниже работает от имени $DEPLOY_USER, а ручные команды на сервере обычно
+# выполняют под root — после этого часть файлов в .git принадлежит root и
+# fetch падает с "unable to append to .git/logs/refs/...: Permission denied".
+# Возвращаем владельца всего репозитория на каждом запуске.
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$DEPLOY_PATH/.git"
 sudo -u "$DEPLOY_USER" git fetch --prune --quiet origin
 sudo -u "$DEPLOY_USER" git reset --hard --quiet "origin/$GIT_REF"
 
@@ -112,6 +118,13 @@ if [ -n "$ADMIN_EMAIL" ]; then
   upsert ADMIN_EMAIL "$ADMIN_EMAIL"
 fi
 
+# Номер счётчика Яндекс Метрики. Пусто = аналитика не подключается вовсе.
+# Значение читается на сборке образа web (build arg NEXT_PUBLIC_YM_ID),
+# поэтому после изменения нужен новый деплой/пересборка web.
+if [ -n "$YANDEX_METRIKA_ID" ]; then
+  upsert YANDEX_METRIKA_ID "$YANDEX_METRIKA_ID"
+fi
+
 if [ -n "$ADMIN_PASSWORD" ]; then
   upsert ADMIN_PASSWORD "$ADMIN_PASSWORD"
 elif ! grep -q '^ADMIN_PASSWORD=' "$ENV_FILE"; then
@@ -135,7 +148,7 @@ fi
 # Тега :latest в GHCR не существует: deploy.yml пушит теги по commit SHA и
 # запускает образы по digest, а пару api/web пишет в .releases/<sha>.
 # Поэтому повторный provision поднимает именно последний записанный релиз,
-# а не пересобирает всё на живом сервере (сборка = OOM и простой сайта).
+# а не пересбирает всё на живом сервере (сборка = OOM и простой сайта).
 if [ -z "$API_IMAGE" ] || [ -z "$WEB_IMAGE" ]; then
   if [ -f "$DEPLOY_PATH/.releases/current" ]; then
     RECORDED_SHA="$(cat "$DEPLOY_PATH/.releases/current")"

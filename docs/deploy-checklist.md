@@ -32,6 +32,7 @@
 | `AUTH_ENABLED` | `true` |
 | `ADMIN_EMAIL` | почта админа |
 | `MEDIA_PUBLIC_BASE_URL` | домен CDN/S3 для картинок (можно пустым) |
+| `YANDEX_METRIKA_ID` | номер счётчика Яндекс Метрики (пусто = аналитики нет) |
 | `DEPLOY_PATH` | `/opt/quetion-site` (по умолчанию) |
 | `DEPLOY_USER` | `deploy` (по умолчанию) |
 | `HEALTH_ORIGIN` | `http://127.0.0.1` (по умолчанию) |
@@ -62,6 +63,11 @@ S3_ACCESS_KEY=
 S3_SECRET_KEY=
 S3_REGION=
 
+# Яндекс Метрика. Значение читается на сборке образа web,
+# поэтому после изменения нужен деплой (или up -d --build web).
+# Скрипт грузится только после согласия посетителя (152-ФЗ).
+YANDEX_METRIKA_ID=
+
 # Ошибки в Sentry (необязательно)
 SENTRY_DSN=
 
@@ -82,8 +88,18 @@ chmod 600 /opt/quetion-site/observability/alertmanager/secrets/telegram_bot_toke
 
 ## 5. После первого запуска
 
+- [ ] Проверить, что сайт отвечает по HTTPS и контейнеры healthy:
+
+```bash
+cd /opt/quetion-site
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+curl -I https://qareerquest.com
+curl -fsS https://qareerquest.com/api/actuator/health
+```
+
 - [ ] Забрать пароль админа из `/root/qareerquest-admin-password.txt` и удалить файл.
 - [ ] Включить 2FA админу.
+- [ ] Проверить автопродление сертификата: `systemctl list-timers qareerquest-tls-renew.timer`.
 - [ ] `scripts/harden-server.sh` с переменной `ADMIN_PUBKEY` — отключит парольный SSH и root-логин.
       После этого добавить в GitHub `LUXVPS_USER=deploy` и `LUXVPS_SSH_KEY`.
 - [ ] Установить unit автостарта: `deploy/quetion-site.service`.
