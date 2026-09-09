@@ -29,20 +29,19 @@ export default {
 	assert.equal(data.questions[0].s[0].p[0], "Компилирует байт-код в машинный.");
 });
 
-// Регресс: проверка «символ начинает имя» использовала sticky-регулярку, и из-за
+// Регресс: проверка «символ начинает имя» шла через sticky-регулярку, и из-за
 // сохранённого lastIndex любое true/false/null после других полей ломало разбор.
 test("читает true/false/null после строк, чисел и массивов", () => {
-	const source = [
-		"export default {",
-		'  a: "текст",',
-		"  b: 42,",
-		'  g: ["jvm"],",'.replace('",', '"],'),
-		"  pop: true,",
-		"  draft: false,",
-		"  note: null,",
-		"  items: [true, false, null, 1],",
-		"}",
-	].join("\n");
+	const source = `export default {
+  a: "текст",
+  b: 42,
+  g: ["jvm"],
+  pop: true,
+  draft: false,
+  note: null,
+  items: [true, false, null, 1],
+}
+`;
 
 	const data = parseDataModule(source);
 	assert.equal(data.pop, true);
