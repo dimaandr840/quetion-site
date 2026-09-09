@@ -101,6 +101,9 @@ ensure_secret POSTGRES_PASSWORD
 ensure_secret JWT_SECRET
 ensure_secret MEILI_MASTER_KEY
 ensure_secret TOTP_ENC_KEY
+# Пароль Grafana нужен только overlay'ю мониторинга, но лежать он должен заранее:
+# без него docker-compose.observability.yml падает на валидации переменных.
+ensure_secret GRAFANA_ADMIN_PASSWORD
 
 upsert PUBLIC_ORIGIN "$PUBLIC_ORIGIN"
 upsert COOKIE_SECURE "$COOKIE_SECURE"
@@ -127,6 +130,22 @@ bash scripts/render-nginx-conf.sh
 
 if [ -n "$GHCR_TOKEN" ]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
+fi
+
+# Тега :latest в GHCR не существует: deploy.yml пушит теги по commit SHA и
+# запускает образы по digest, а пару api/web пишет в .releases/<sha>.
+# Поэтому повторный provision поднимает именно последний записанный релиз,
+# а не пересобирает всё на живом сервере (сборка = OOM и простой сайта).
+if [ -z "$API_IMAGE" ] || [ -z "$WEB_IMAGE" ]; then
+  if [ -f "$DEPLOY_PATH/.releases/current" ]; then
+    RECORDED_SHA="$(cat "$DEPLOY_PATH/.releases/current")"
+    RECORDED_FILE="$DEPLOY_PATH/.releases/$RECORDED_SHA"
+    if [ -f "$RECORDED_FILE" ]; then
+      API_IMAGE="$(sed -n '1p' "$RECORDED_FILE")"
+      WEB_IMAGE="$(sed -n '2p' "$RECORDED_FILE")"
+      echo "  последний записанный релиз: $RECORDED_SHA"
+    fi
+  fi
 fi
 
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
