@@ -1,0 +1,151 @@
+# Алерты про сам сервер и про доступность сайта снаружи.
+# Приложенческие SLO (ошибки, латентность, пул БД) лежат в slo.yml.
+groups:
+  - name: host-load
+    interval: 30s
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Нет метрик хоста"
+          description: "node-exporter не отвечает 5 минут — нагрузка VPS больше не контролируется."
+
+      # 85% взяты с запасом: сборки и pg_dump штатно дают короткие пики,
+      # поэтому окно for: 15m, а не минута.
+      - alert: HostCpuHigh
+        expr: 100 * (1 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU выше 85%"
+          description: "Средняя загрузка CPU держится выше 85% более 15 минут."
+
+      # Нормируем на число ядер: на 2 vCPU load 4 — беда, на 8 vCPU — норма.
+      - alert: HostLoadHigh
+        expr: node_load5 / count by (host) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Load average вдвое выше числа ядер"
+          description: "Очередь готовых процессов стабильно больше емкости машины."
+
+      - alert: HostMemoryHigh
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Память занята больше чем на 90%"
+          description: "Следующий шаг — OOM-killer, который обычно убивает JVM или Postgres."
+
+      # Swap есть как страховка, но постоянный swap = деградация латентности.
+      - alert: HostSwapUsageHigh
+        expr: node_memory_SwapTotal_bytes > 0 and 100 * (1 - node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes) > 50
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap занят более чем наполовину"
+          description: "Машине не хватает RAM: пора увеличивать тариф или урезать лимиты контейнеров."
+
+      - alert: HostDiskSpaceLow
+        expr: 100 * node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Меньше 15% свободного места на {{ $labels.mountpoint }}"
+          description: "Главные пожиратели места: старые docker-образы, бэкапы и данные Prometheus."
+
+      # Лучше узнать о заканчивающемся диске за 4 часа, а не когда Postgres встал.
+      - alert: HostDiskWillFillIn4h
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[6h], 4 * 3600) < 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Диск {{ $labels.mountpoint }} закончится в ближайшие 4 часа"
+          description: "По тренду за 6 часов свободное место уйдёт в ноль. Начните с docker system prune и ротации бэкапов."
+
+  - name: host-containers
+    interval: 30s
+    rules:
+      # Контейнер у своего лимита памяти — будущий OOM именно этого сервиса.
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          container_spec_memory_limit_bytes{name!=""} > 0
+          and
+          100 * container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""} > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} упёрся в лимит памяти"
+          description: "Контейнер держит больше 90% своего лимита 10 минут."
+
+      # Перезапуски видны как обнуление времени старта: во время деплоя
+      # один рестарт нормален, три и больше за 15 минут — уже луп.
+      - alert: ContainerRestartLoop
+        expr: changes(container_start_time_seconds{name!=""}[15m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.name }} перезапускается по кругу"
+          description: "Больше трёх стартов за 15 минут. Смотрите docker logs этого контейнера."
+
+  - name: availability
+    interval: 30s
+    rules:
+      # Главный алерт доступности: смотрит глазами пользователя, через nginx.
+      - alert: SiteDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Недоступен {{ $labels.instance }}"
+          description: "HTTP-проба падает 2 минуты (probe: {{ $labels.probe }})."
+
+      - alert: SiteSlow
+        expr: probe_duration_seconds > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} отвечает дольше 3 с"
+          description: "Полное время ответа пробы выше 3 секунд более 10 минут."
+
+      - alert: BlackboxProbeFailedDns
+        expr: probe_dns_lookup_time_seconds > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленный DNS для {{ $labels.instance }}"
+          description: "Разрешение имени занимает больше 2 секунд."
+
+      # Автопродление сертификата тихо ломается; 14 дней запаса достаточно,
+      # чтобы успеть починить renew-таймер вручную.
+      - alert: TlsCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 14 * 24 * 3600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS-сертификат {{ $labels.instance }} истекает"
+          description: "Осталось меньше 14 дней. Проверьте systemctl status qareerquest-tls-renew.timer."
+
+      - alert: TlsCertExpiringCritical
+        expr: probe_ssl_earliest_cert_expiry - time() < 3 * 24 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS-сертификат {{ $labels.instance }} истекает меньше чем через 3 дня"
+          description: "Запустите scripts/renew-tls.sh вручную."
