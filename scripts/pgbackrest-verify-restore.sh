@@ -117,8 +117,11 @@ expect_rows answer_section "${VERIFY_MIN_ANSWER_SECTION:-1}"
 expect_rows app_user "${VERIFY_MIN_APP_USER:-1}"
 
 # Без админа восстановленная база бесполезна: войти будет некем.
+# Роли пишутся Spring Security с префиксом ROLE_ (app_user_role.role = 'ROLE_ADMIN'),
+# но колонка — свободный varchar(32) без CHECK, поэтому принимаем оба написания:
+# проверка не должна падать из-за соглашения об именовании ролей.
 expect_zero "есть хотя бы один ADMIN" \
-	"SELECT CASE WHEN count(*) > 0 THEN 0 ELSE 1 END FROM app_user_role WHERE role = 'ADMIN';"
+	"SELECT CASE WHEN count(*) > 0 THEN 0 ELSE 1 END FROM app_user_role WHERE role IN ('ADMIN', 'ROLE_ADMIN');"
 
 # Целостность связей: битые FK означают, что восстановление частичное.
 expect_zero "вопросы без профессии" \
