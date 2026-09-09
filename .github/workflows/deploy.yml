@@ -110,10 +110,13 @@ jobs:
           context: ./frontend
           push: true
           tags: ghcr.io/${{ github.repository }}/web:${{ needs.resolve.outputs.sha }}
+          # NEXT_PUBLIC_YM_ID — номер счётчика Яндекс Метрики. Пустое значение =
+          # счётчик не подключается вовсе (см. frontend/components/analytics/YandexMetrika.tsx).
           build-args: |
             NEXT_PUBLIC_AUTH_ENABLED=${{ vars.AUTH_ENABLED || 'true' }}
             NEXT_PUBLIC_SITE_URL=${{ vars.PUBLIC_ORIGIN }}
             NEXT_PUBLIC_MEDIA_BASE_URL=${{ vars.MEDIA_PUBLIC_BASE_URL }}
+            NEXT_PUBLIC_YM_ID=${{ vars.YANDEX_METRIKA_ID }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
