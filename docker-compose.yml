@@ -1,8 +1,8 @@
 name: devprep
 
 # Общие правила усиления для всех сервисов:
-#  * no-new-privileges закрывает путь к эскалации через setuid-бинарфайлы
-#    внутри образа, если RCE вс႑-таки случилась;
+#  * no-new-privileges закрывает путь к эскалации через setuid-бинарники
+#    внутри образа, если RCE всё-таки случилась;
 #  * база и поиск порты наружу не публикуют вообще — только nginx смотрит в сеть;
 #  * размер логов ограничен, чтобы шумные атаки не забили диск хоста.
 #
@@ -150,12 +150,15 @@ services:
       PASSWORD_RESET_MAX_ATTEMPTS: ${PASSWORD_RESET_MAX_ATTEMPTS:-5}
       PASSWORD_RESET_RESET_TOTP: ${PASSWORD_RESET_RESET_TOTP:-true}
       SPRINGDOC_ENABLED: ${SPRINGDOC_ENABLED:-false}
-      # prometheus в списке по умолчанию: наружу эндпоинт вс႑ равно не выходит —
+      # prometheus в списке по умолчанию: наружу эндпоинт всё равно не выходит —
       # nginx отдаёт 404 на весь /actuator/, кроме /actuator/health.
       MANAGEMENT_ENDPOINTS: ${MANAGEMENT_ENDPOINTS:-health,info,prometheus}
-      # 10% трейсов — компромисс между объᄅмом данных и шансом поймать редкий тормоз.
-      # На время разбора инцидента ставьте 1.0.
-      TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-0.1}
+      # Трейсы уходят в Tempo, а он живёт только в docker-compose.observability.yml.
+      # Без поднятого overlay экспортёр каждые пару десятков секунд пишет
+      # ERROR «Failed to export spans ... timeout» и зашумляет логи, поэтому
+      # по умолчанию семплинг выключен. Вместе с мониторингом поставьте
+      # TRACING_SAMPLE_RATE=0.1 в .env (на время разбора инцидента — 1.0).
+      TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-0}
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
@@ -210,6 +213,9 @@ services:
         # Домен хранилища попадает в images.remotePatterns и в img-src CSP,
         # а оба списка вычисляются на сборке — отсюда build arg.
         NEXT_PUBLIC_MEDIA_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
+        # Номер счётчика Яндекс Метрики. Пусто = скрипт не встраивается вообще.
+        # Вышивается на сборке, поэтому после изменения нужен новый деплой.
+        NEXT_PUBLIC_YM_ID: ${YANDEX_METRIKA_ID:-}
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_ORIGIN:-http://localhost}/api
@@ -220,7 +226,7 @@ services:
       OTEL_SERVICE_NAME: devprep-web
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318}
       OTEL_TRACES_SAMPLER: parentbased_traceidratio
-      OTEL_TRACES_SAMPLER_ARG: ${TRACING_SAMPLE_RATE:-0.1}
+      OTEL_TRACES_SAMPLER_ARG: ${TRACING_SAMPLE_RATE:-0}
       # Порт с метриками Next для Prometheus (job devprep-web). Наружу не публикуется.
       METRICS_PORT: "9464"
     # robots.txt отдаётся самим Next и не ходит в API: проба проверяет ровно
@@ -262,7 +268,11 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
     healthcheck:
       # -O /dev/null: в read_only-контейнере wget не может писать файл в текущий каталог.
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/actuator/health"]
+      #
+      # Путь именно /actuator/health, а не /api/actuator/health: location /api/
+      # проксирует URI в Spring без обрезки префикса, а актуатор живёт в корне —
+      # такая проба получала 404/500 и контейнер уходил в unhealthy при рабочем сайте.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 5

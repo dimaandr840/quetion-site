@@ -19,10 +19,12 @@ for image in "${API_IMAGE:-}" "${WEB_IMAGE:-}"; do
 done
 export API_IMAGE WEB_IMAGE
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.images.yml)
+# Actuator lives at the root: nginx has a dedicated location /actuator/health and
+# proxies /api/ without stripping the prefix, so /api/actuator/health returns 404.
 check_health() {
   local origin=${HEALTH_ORIGIN:-http://127.0.0.1}
   for _ in $(seq 1 60); do
-    if curl -fsSL --max-time 5 "$origin/api/actuator/health" >/dev/null \
+    if curl -fsSL --max-time 5 "$origin/actuator/health" >/dev/null \
       && curl -fsSL --max-time 10 "$origin/" >/dev/null \
       && curl -fsSL --max-time 10 "$origin/search" >/dev/null; then
       return 0

@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /** Ошибки в формате RFC 7807 (application/problem+json). */
 @Slf4j
@@ -24,6 +25,19 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException e) {
         return problem(HttpStatus.NOT_FOUND, "Не найдено", e.getMessage(), "not-found");
+    }
+
+    /**
+     * Несуществующий путь — это 404, а не авария. Без этого обработчика
+     * NoResourceFoundException уходил в handleUnexpected: каждый запрос бота или
+     * опечатка в адресе давали 500 и ERROR со стеком в логах, а healthcheck
+     * с неверным путём выглядел как падение приложения.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoResource(NoResourceFoundException e) {
+        log.debug("Нет такого ресурса: {}", e.getResourcePath());
+        return problem(
+                HttpStatus.NOT_FOUND, "Не найдено", "Запрошенный адрес не существует.", "not-found");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
