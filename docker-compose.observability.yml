@@ -128,6 +128,52 @@ services:
       - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo-data:/var/tempo
 
+  # Нагрузка самого VPS: CPU, load average, память, swap, диск, сеть.
+  # pid: host и проброс / в /host нужны, иначе он покажет метрики своего
+  # контейнера, а не машины. Порт наружу не публикуется вообще:
+  # Prometheus ходит к нему по внутренней docker-сети.
+  node-exporter:
+    <<: *obs-hardening
+    image: prom/node-exporter:v1.9.0
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|host/(dev|proc|sys|run))($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    volumes:
+      - /:/host:ro,rslave
+
+  # Нагрузка в разрезе контейнеров: кто именно съел CPU/память и кто
+  # уходит в рестарт-луп. Без privileged на Ubuntu он не видит часть cgroup'ов.
+  cadvisor:
+    <<: *obs-hardening
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --housekeeping_interval=15s
+      - --docker_only=true
+      # Лишние метрики выключены: на одном VPS они дают десятки тысяч рядов.
+      - --disable_metrics=percpu,sched,process,hugetlb,referenced_memory,cpu_topology,resctrl
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  # Доступность: синтетические HTTP-пробы снаружи стека приложения.
+  # Отличаются от /actuator/health тем, что идут через nginx и видят то же,
+  # что видит браузер пользователя, включая срок жизни TLS-сертификата.
+  blackbox:
+    <<: *obs-hardening
+    image: prom/blackbox-exporter:v0.26.0
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./observability/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+
 volumes:
   prometheus-data:
   alertmanager-data:

@@ -1,0 +1,37 @@
+# Конфиг blackbox-exporter — пробы доступности сайта.
+# Цели задаются не здесь, а в observability/prometheus/prometheus.yml (job blackbox-http).
+modules:
+  # Внутренняя проба через nginx: отвечает на вопрос «стек жив».
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      method: GET
+      follow_redirects: true
+      # В docker-сети IPv6 обычно нет; без этого проба ловит таймаут на AAAA.
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  # Внешняя проба по реальному домену: дополнительно требует валидный TLS
+  # и даёт метрику probe_ssl_earliest_cert_expiry — из неё строится алерт
+  # об истекающем сертификате (сломанный renew-таймер иначе заметен только постфактум).
+  http_2xx_public:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  # TCP-проба для зависимостей без HTTP (Postgres/Meilisearch как порт).
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
