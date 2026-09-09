@@ -21,11 +21,13 @@ export interface AdminNavItem {
     | "briefcase"
     | "grid"
     | "users"
-    | "bar-chart-2";
+    | "bar-chart-2"
+    | "plus";
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/questions", label: "Вопросы", icon: "help-circle" },
+  { href: "/admin/import", label: "Импорт", icon: "plus" },
   { href: "/admin/professions", label: "Направления", icon: "briefcase" },
   { href: "/admin/categories", label: "Темы", icon: "grid" },
   { href: "/admin/users", label: "Пользователи", icon: "users" },
