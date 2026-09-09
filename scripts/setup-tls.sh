@@ -17,11 +17,12 @@ mkdir -p nginx/certbot-www nginx/letsencrypt nginx/tls/redirect
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
 # ACME-челлендж отдаёт nginx на 80 порту (location ^~ /.well-known/acme-challenge/).
-# Конфиг перегенерируем и перечитываем: если nginx уже был поднят со старым
-# nginx.effective.conf, без этого шага он продолжит отвечать 404 на челлендж.
+# Конфиг перегенерируем и пересоздаём контейнер: если nginx уже был поднят со
+# старым nginx.effective.conf, без --force-recreate он продолжит отвечать 404
+# на челлендж (bind mount держит прежний inode файла конфига).
 bash scripts/render-nginx-conf.sh
-$COMPOSE up -d nginx
-$COMPOSE exec -T nginx nginx -s reload 2>/dev/null || $COMPOSE restart nginx
+$COMPOSE up -d --force-recreate nginx
+$COMPOSE exec -T nginx nginx -t
 
 # Самопроверка webroot до обращения к Let's Encrypt: неудачные валидации
 # лимитируются (5 в час на домен), поэтому дешевле упасть здесь с понятным
@@ -207,14 +208,19 @@ sed -i "s/__DOMAIN__/$DOMAIN/g" nginx/tls/tls.conf
 
 cat > nginx/tls/redirect/redirect.conf <<'REDIRECT'
 # Сгенерировано scripts/setup-tls.sh.
-# ACME-челлендж должен остаться доступным по http, иначе продление упрётся в редирект.
-if ($request_uri !~ ^/\.well-known/acme-challenge/) {
+# Из редиректа 80→443 исключены два пути:
+#   * ACME-челлендж — иначе продление сертификата упрётся в редирект;
+#   * /api/actuator/health — по нему стучится healthcheck контейнера nginx на
+#     http://127.0.0.1. Через HTTPS проба падает (сертификат выписан на домен,
+#     а не на 127.0.0.1: certificate verify failed), и контейнер уходит в
+#     unhealthy при полностью рабочем сайте.
+if ($request_uri !~ ^/(?:\.well-known/acme-challenge/|api/actuator/health$)) {
     return 301 https://$host$request_uri;
 }
 REDIRECT
 
 bash scripts/render-nginx-conf.sh
-$COMPOSE up -d nginx
+$COMPOSE up -d --force-recreate nginx
 
 if $COMPOSE exec -T nginx nginx -t; then
   $COMPOSE exec -T nginx nginx -s reload
