@@ -23,7 +23,11 @@ RUN npm run build
 
 FROM node:24-alpine AS run
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+# HOSTNAME задан явно: server.js из output: "standalone" читает адрес для
+# listen из process.env.HOSTNAME, а Docker подставляет туда ID контейнера.
+# Без этой переменной сервер слушает только адрес eth0, и проба healthcheck
+# на http://127.0.0.1:3000/robots.txt получает connection refused.
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
