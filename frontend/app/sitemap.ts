@@ -34,6 +34,26 @@ function lastModified(entity: unknown): { lastModified?: Date } {
   return Number.isNaN(date.getTime()) ? {} : { lastModified: date };
 }
 
+/**
+ * Карта сайта не имеет права падать.
+ *
+ * Раньше три запроса к API шли через Promise.all без обработки ошибок: любой
+ * таймаут, 5xx или не поднятый контейнер api превращали /sitemap.xml в 500.
+ * Для поисковика 500 на карте сайта неотличим от её отсутствия — и именно
+ * так это выглядело в аудите («sitemap недоступен»), хотя маршрут в коде был.
+ *
+ * Теперь каждый источник грузится независимо, а статические адреса
+ * отдаются в любом случае: неполная карта лучше, чем пятисотка.
+ */
+async function safeList<T>(load: () => Promise<T[]>, label: string): Promise<T[]> {
+  try {
+    return await load();
+  } catch (error) {
+    console.error(`[sitemap] не удалось загрузить ${label}`, error);
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // /privacy больше не страница, а редирект на /legal/privacy: адреса со
   // статусом 301 в sitemap держать нельзя.
@@ -49,9 +69,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const [professions, categories, questions] = await Promise.all([
-    fetchProfessions(),
-    fetchCategories(),
-    fetchQuestions(),
+    safeList(fetchProfessions, "профессии"),
+    safeList(fetchCategories, "темы"),
+    safeList(fetchQuestions, "вопросы"),
   ]);
 
   // Считаем наполнение по факту, а не по questionCount из API: поле опциональное.
