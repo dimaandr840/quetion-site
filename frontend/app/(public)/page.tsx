@@ -42,6 +42,13 @@ export default async function HomePage() {
   // Блок «Темы» с главной убран, но счётчик тем остаётся в полосе цифр.
   const topics = topicPills(categories);
   const deck = popular.slice(0, 3);
+  // Те же три вопроса раньше показывались дважды: в герое и в блоке
+  // «Популярные вопросы». Для посетителя это выглядит как ошибка, а для поиска —
+  // как повторяющиеся анкоры на одной странице.
+  const deckSlugs = new Set(deck.map((question) => question.slug));
+  const popularRest = popular.filter(
+    (question) => !deckSlugs.has(question.slug)
+  );
 
   const facts = [
     { value: professions.length, label: "профессий в каталоге" },
@@ -160,24 +167,26 @@ export default async function HomePage() {
         </SpotlightScope>
       </section>
 
-      <section className={`shell ${styles.section}`}>
-        <div className={`reveal ${styles.sectionHead}`}>
-          <h2 className={`h2 ${styles.sectionTitle}`}>Популярные вопросы</h2>
-          <Link href="/questions" className={styles.sectionLink}>
-            Все вопросы
-            <Icon name="arrow-right" size={16} />
-          </Link>
-        </div>
-        <div className={`reveal-children ${styles.questionList}`}>
-          {popular.map((question) => (
-            <QuestionCard
-              key={question.slug}
-              question={question}
-              path={questionPath(question)}
-            />
-          ))}
-        </div>
-      </section>
+      {popularRest.length > 0 && (
+        <section className={`shell ${styles.section}`}>
+          <div className={`reveal ${styles.sectionHead}`}>
+            <h2 className={`h2 ${styles.sectionTitle}`}>Популярные вопросы</h2>
+            <Link href="/questions" className={styles.sectionLink}>
+              Все вопросы
+              <Icon name="arrow-right" size={16} />
+            </Link>
+          </div>
+          <div className={`reveal-children ${styles.questionList}`}>
+            {popularRest.map((question) => (
+              <QuestionCard
+                key={question.slug}
+                question={question}
+                path={questionPath(question)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }
