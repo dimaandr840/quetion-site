@@ -33,8 +33,8 @@ export const SITE_NAME = "Qareer Quest";
 /** Домен без схемы — для подписей, писем и футера. */
 export const SITE_DOMAIN = "qareerquest.com";
 
-/** Адрес для обратной связи. */
-export const SITE_CONTACT_EMAIL = "hello@qareerquest.com";
+/** Адрес для обратной связи и обращений по персональным данным. */
+export const SITE_CONTACT_EMAIL = "jdodylix@gmail.com";
 
 export const SITE_DESCRIPTION =
   "Разборы вопросов с собеседований: короткий ответ, подробное объяснение и практические задания по IT, дизайну, маркетингу, продукту, финансам и HR.";
