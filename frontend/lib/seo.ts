@@ -1,8 +1,14 @@
 /**
- * Сборка метаданных страницы: canonical + Open Graph + Twitter в одном месте.
+ * Сборка метаданных страницы: canonical + Open Graph в одном месте.
  *
  * Главное правило: canonical всегда указывает на чистый путь без параметров
  * ?level, ?sort, ?page, ?profession — именно они создают дубли в индексе.
+ *
+ * Картинки для шеринга (og:image / twitter:image) намеренно не задаются, и
+ * twitter-карточка не объявляется вовсе: card="summary_large_image" без
+ * картинки давал пустую рамку в Telegram, VK и LinkedIn. Соцсети в этом случае
+ * строят превью из title + description Open Graph. Если превью с картинкой
+ * понадобится, добавлять нужно обе части сразу — и card, и сам og:image.
  */
 import type { Metadata } from "next";
 import {
@@ -43,11 +49,6 @@ export function buildMetadata({
       url,
       siteName: SITE_NAME,
       locale: SITE_LOCALE,
-      ...(title ? { title: `${title} | ${SITE_NAME}` } : {}),
-      description: resolvedDescription,
-    },
-    twitter: {
-      card: "summary_large_image",
       ...(title ? { title: `${title} | ${SITE_NAME}` } : {}),
       description: resolvedDescription,
     },

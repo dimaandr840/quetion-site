@@ -39,6 +39,12 @@ const mono = JetBrains_Mono({
   preload: false,
 });
 
+/**
+ * Картинки для шеринга не заявляются: og:image и twitter:image на сайте нет,
+ * а twitter-карточка убрана целиком — card="summary_large_image" без картинки
+ * давал пустую рамку в Telegram, VK и LinkedIn. Превью соцсети собирают из
+ * Open Graph title + description.
+ */
 export const metadata: Metadata = {
   // metadataBase делает все canonical и OG-URL абсолютными.
   metadataBase: new URL(SITE_URL),
@@ -54,11 +60,6 @@ export const metadata: Metadata = {
     url: "/",
     siteName: SITE_NAME,
     locale: "ru_RU",
-    title: `${SITE_NAME} — вопросы и ответы для IT-собеседований`,
-    description: SITE_DESCRIPTION,
-  },
-  twitter: {
-    card: "summary_large_image",
     title: `${SITE_NAME} — вопросы и ответы для IT-собеседований`,
     description: SITE_DESCRIPTION,
   },
