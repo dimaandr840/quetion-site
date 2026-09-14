@@ -27,7 +27,7 @@
     <springdoc.version>2.8.6</springdoc.version>
     <sentry.version>8.55.0</sentry.version>
     <awssdk.version>2.54.12</awssdk.version>
-    <dependency-check.version>10.0.4</dependency-check.version>
+    <dependency-check.version>13.0.0</dependency-check.version>
     <logstash-encoder.version>9.0</logstash-encoder.version>
   </properties>
 
