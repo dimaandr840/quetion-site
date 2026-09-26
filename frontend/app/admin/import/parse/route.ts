@@ -61,10 +61,9 @@ export async function POST(request: Request) {
 
 	let source: string;
 	try {
-		const body = (await request.json()) as { source?: unknown };
-		source = typeof body.source === "string" ? body.source : "";
+		source = await request.text();
 	} catch {
-		return bad("Тело запроса не является JSON");
+		return bad("Не удалось прочитать загруженный файл");
 	}
 
 	if (!source.trim()) return bad("Файл пустой");

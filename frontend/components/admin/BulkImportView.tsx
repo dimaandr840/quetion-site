@@ -78,10 +78,10 @@ export function BulkImportView() {
         const source = await file.text();
         const response = await fetch("/admin/import/parse", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
           credentials: "include",
           cache: "no-store",
-          body: JSON.stringify({ source }),
+          body: source,
         });
 
         const body = (await response.json()) as { data?: unknown; error?: string };
