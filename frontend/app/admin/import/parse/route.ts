@@ -21,8 +21,8 @@ export const dynamic = "force-dynamic";
 
 const INTERNAL_BASE = process.env.API_INTERNAL_BASE_URL ?? "http://localhost:8080/api";
 
-/** Файл вопросов на 100 КБ — норма; всё, что кратно больше, скорее ошибка. */
-const MAX_SOURCE_LENGTH = 2_000_000;
+/** Большие пакетные импорты разрешены только через защищённую админскую ручку. */
+const MAX_SOURCE_LENGTH = 30_000_000;
 
 function bad(message: string, status = 400) {
 	return NextResponse.json({ error: message }, { status });
