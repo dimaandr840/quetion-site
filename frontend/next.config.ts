@@ -45,6 +45,10 @@ const mediaHost = (() => {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // proxy.ts буферизует тело запроса; без явного лимита Next.js обрезает его на 10 МБ.
+    proxyClientMaxBodySize: "30mb",
+  },
   output: "standalone",
   // Не рассказываем сканерам версию и стек в X-Powered-By.
   poweredByHeader: false,
